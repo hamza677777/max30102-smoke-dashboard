@@ -1,0 +1,189 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Arial, sans-serif;
+  background: #06101f;
+  color: white;
+}
+
+.container {
+  min-height: 100vh;
+  padding: 22px 45px;
+}
+
+.header {
+  background: #111c2e;
+  border-radius: 18px;
+  padding: 18px 26px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.header p {
+  margin: 6px 0 0;
+  color: #9fb3d1;
+}
+
+.live {
+  background: #dc2626;
+  padding: 10px 20px;
+  border-radius: 25px;
+  font-weight: bold;
+  box-shadow: 0 0 18px #dc2626;
+}
+
+.cards {
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.card {
+  background: #111c2e;
+  border-radius: 18px;
+  padding: 20px;
+  text-align: center;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #38bdf8;
+}
+
+.card h1 {
+  margin: 8px 0;
+  font-size: 46px;
+}
+
+.card p {
+  margin: 0;
+  color: #cbd5e1;
+}
+
+.red {
+  border-top: 4px solid #ef4444;
+}
+
+.green {
+  border-top: 4px solid #22c55e;
+}
+
+.orange {
+  border-top: 4px solid #f97316;
+}
+
+.graph {
+  margin-top: 22px;
+  background: #111c2e;
+  border-radius: 18px;
+  padding: 18px;
+  height: 330px;
+}
+
+.graph h2 {
+  margin-top: 0;
+  color: #38bdf8;
+  font-size: 20px;
+}
+
+.buttons {
+  margin: 22px 0;
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+button {
+  border: none;
+  padding: 11px 20px;
+  border-radius: 12px;
+  background: #0284c7;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #0369a1;
+}
+
+.stop {
+  background: #dc2626;
+}
+
+.stop:hover {
+  background: #b91c1c;
+}
+
+.alarm-panel {
+  background: #111c2e;
+  border-radius: 18px;
+  padding: 16px 20px;
+  margin-bottom: 18px;
+}
+
+.alarm-panel h2 {
+  margin-top: 0;
+  color: #38bdf8;
+}
+
+.safe {
+  color: #22c55e;
+  font-weight: bold;
+}
+
+.danger {
+  color: #ef4444;
+  font-weight: bold;
+}
+
+.status {
+  background: #111c2e;
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.row {
+  background: #06101f;
+  padding: 13px 16px;
+  border-radius: 12px;
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.row b {
+  color: #22c55e;
+}
+
+@media (max-width: 900px) {
+  .container {
+    padding: 16px;
+  }
+
+  .header {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
+  }
+
+  .graph {
+    height: 280px;
+  }
+}
