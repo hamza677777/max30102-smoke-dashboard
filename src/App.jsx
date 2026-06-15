@@ -1,248 +1,339 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-
 import {
   Chart as ChartJS,
   LineElement,
   PointElement,
   CategoryScale,
   LinearScale,
-  Legend,
   Tooltip,
+  Filler,
 } from "chart.js";
-
 import { Line } from "react-chartjs-2";
 import "./App.css";
 
-ChartJS.register(
-  LineElement,
-  PointElement,
-  CategoryScale,
-  LinearScale,
-  Legend,
-  Tooltip
-);
+ChartJS.register(LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Filler);
 
 const supabase = createClient(
-  "https://eyqlnokjumljeejibqrf.supabase.co",
-  "sb_publishable_4xM5tJcI0iQP1LRgBkt57A_m8gvDmIE"
+  "https://anfvbycrizqhqwaqgnks.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFuZnZieWNyaXpxaHF3YXFnbmtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NTc3NDksImV4cCI6MjA5NzAzMzc0OX0.3W13dxVxBC9p9We1Id5d0sWSryWxpdYrk175FKIS5bE"
 );
 
 function App() {
-  const [data, setData] = useState(null);
+  const [latest, setLatest] = useState(null);
+  const [records, setRecords] = useState([]);
   const [running, setRunning] = useState(true);
+  const [showTable, setShowTable] = useState(false);
+  const [theme, setTheme] = useState("hospital");
+  const [time, setTime] = useState(new Date());
 
+  const [labels, setLabels] = useState([]);
   const [hrHistory, setHrHistory] = useState([]);
   const [spo2History, setSpo2History] = useState([]);
-  const [smokeHistory, setSmokeHistory] = useState([]);
+  const [tempHistory, setTempHistory] = useState([]);
 
   async function fetchData() {
-    if (!running) return;
-
     const { data, error } = await supabase
       .from("patient_data")
-      .select("*")
+      .select("id, hr, spo2, temp, created_at")
       .order("id", { ascending: false })
-      .limit(1);
+      .limit(10);
 
-    if (!error && data.length > 0) {
-      const latest = data[0];
+    if (error) return;
 
-      setData(latest);
+    if (data && data.length > 0) {
+      const row = data[0];
 
-      setHrHistory((prev) => [
-        ...prev.slice(-19),
-        latest.heart_rate,
-      ]);
+      const clean = {
+        id: row.id,
+        hr: Number(row.hr ?? 0),
+        spo2: Number(row.spo2 ?? 0),
+        temp: Number(row.temp ?? 0),
+        created_at: row.created_at,
+      };
 
-      setSpo2History((prev) => [
-        ...prev.slice(-19),
-        latest.spo2,
-      ]);
+      setLatest(clean);
+      setRecords(data);
 
-      setSmokeHistory((prev) => [
-        ...prev.slice(-19),
-        latest.smoke,
-      ]);
+      if (running) {
+        setLabels((prev) => [...prev.slice(-17), new Date().toLocaleTimeString()]);
+        setHrHistory((prev) => [...prev.slice(-17), clean.hr]);
+        setSpo2History((prev) => [...prev.slice(-17), clean.spo2]);
+        setTempHistory((prev) => [...prev.slice(-17), clean.temp]);
+      }
     }
   }
 
   useEffect(() => {
     fetchData();
+    const dataTimer = setInterval(fetchData, 2000);
+    const clockTimer = setInterval(() => setTime(new Date()), 1000);
 
-    const timer = setInterval(fetchData, 2000);
-
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(dataTimer);
+      clearInterval(clockTimer);
+    };
   }, [running]);
 
-  const hrAlarm =
-    data &&
-    (data.heart_rate > 120 || data.heart_rate < 50);
+  const hrStatus =
+    !latest ? "Waiting" : latest.hr < 50 || latest.hr > 120 ? "Critical" : latest.hr > 100 ? "Warning" : "Normal";
 
-  const spo2Alarm =
-    data &&
-    data.spo2 < 90;
+  const spo2Status =
+    !latest ? "Waiting" : latest.spo2 < 90 ? "Critical" : latest.spo2 < 95 ? "Warning" : "Normal";
 
-  const smokeAlarm =
-    data &&
-    data.smoke > 300;
+  const tempStatus =
+    !latest ? "Waiting" : latest.temp < 35 || latest.temp > 38 ? "Critical" : latest.temp > 37.5 ? "Warning" : "Normal";
 
-  const chartData = {
-    labels: hrHistory.map((_, i) => i + 1),
+  const overallStatus =
+    hrStatus === "Critical" || spo2Status === "Critical" || tempStatus === "Critical"
+      ? "Critical"
+      : hrStatus === "Warning" || spo2Status === "Warning" || tempStatus === "Warning"
+      ? "Warning"
+      : latest
+      ? "Normal"
+      : "Waiting";
 
-    datasets: [
-      {
-        label: "Heart Rate",
-        data: hrHistory,
-        borderColor: "#ff4d4d",
-        tension: 0.4,
+  function chartData(title, values, color) {
+    return {
+      labels,
+      datasets: [
+        {
+          label: title,
+          data: values,
+          borderColor: color,
+          backgroundColor: color + "2e",
+          fill: true,
+          tension: 0.45,
+          borderWidth: 3,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+        },
+      ],
+    };
+  }
+
+  function chartOptions(min, max, unit) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 350 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (context) => `${context.parsed.y} ${unit}`,
+          },
+        },
       },
-
-      {
-        label: "SpO₂",
-        data: spo2History,
-        borderColor: "#00ff88",
-        tension: 0.4,
+      scales: {
+        x: {
+          display: false,
+          grid: { display: false },
+        },
+        y: {
+          min,
+          max,
+          ticks: {
+            color: "#94a3b8",
+            font: { size: 11 },
+          },
+          grid: {
+            color: "rgba(148,163,184,0.12)",
+          },
+        },
       },
+    };
+  }
 
-      {
-        label: "Smoke",
-        data: smokeHistory,
-        borderColor: "#ff9900",
-        tension: 0.4,
-      },
-    ],
-  };
+  function downloadCSV() {
+    let csv = "ID,HR,SpO2,Temp,Time\n";
+    records.forEach((r) => {
+      csv += `${r.id},${r.hr},${r.spo2},${r.temp},${r.created_at}\n`;
+    });
+
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+
+    a.href = url;
+    a.download = "patient_data.csv";
+    a.click();
+  }
 
   return (
-    <div className="container">
+    <div className={`app ${theme}`}>
+      <div className="container">
+        <div className="topbar">
+          <div>
+            <h1>TeleDx Pro</h1>
+            <p>Smart Remote Monitoring System</p>
+          </div>
 
-      <div className="header">
-        <div>
-          <h1>MAX30102 & Smoke Sensor IoT Dashboard</h1>
-          <p>
-            ESP32 → MQTT → Node-RED → Supabase → React
-          </p>
+          <div className="top-actions">
+            <select value={theme} onChange={(e) => setTheme(e.target.value)}>
+              <option value="hospital">Hospital Blue</option>
+              <option value="black">Black</option>
+              <option value="purple">Purple</option>
+              <option value="green">Green</option>
+            </select>
+
+            <span className="clock">{time.toLocaleTimeString()}</span>
+
+            <span className={running ? "badge live" : "badge pause"}>
+              {running ? "LIVE" : "PAUSED"}
+            </span>
+          </div>
         </div>
 
-        <div className="live">
-          ● LIVE
-        </div>
-      </div>
+        <div className="system-panel">
+          <div>
+            <span>Device ID</span>
+            <b>TDX-001</b>
+          </div>
 
-      <div className="cards">
+          <div>
+            <span>System Mode</span>
+            <b>Live Monitoring</b>
+          </div>
 
-        <div className="card red">
-          <h2>❤️ Heart Rate</h2>
-          <h1>{data?.heart_rate ?? "--"}</h1>
-          <p>BPM</p>
-        </div>
+          <div>
+            <span>Connection</span>
+            <b>AWS Cloud Connected</b>
+          </div>
 
-        <div className="card green">
-          <h2>🫁 SpO₂</h2>
-          <h1>{data?.spo2 ?? "--"}</h1>
-          <p>%</p>
-        </div>
-
-        <div className="card orange">
-          <h2>💨 Smoke</h2>
-          <h1>{data?.smoke ?? "--"}</h1>
-          <p>ppm</p>
+          <div>
+            <span>Overall Status</span>
+            <b className={`status-${overallStatus.toLowerCase()}`}>{overallStatus}</b>
+          </div>
         </div>
 
-      </div>
+        <div className="vital-cards">
+          <div className="vital-card red">
+            <span>❤️ Heart Rate</span>
+            <h2>{latest ? latest.hr : "--"}</h2>
+            <p>BPM</p>
+            <small className={`status-${hrStatus.toLowerCase()}`}>{hrStatus}</small>
+          </div>
 
-      <div className="graph">
+          <div className="vital-card green">
+            <span>🫁 SpO₂</span>
+            <h2>{latest ? latest.spo2 : "--"}</h2>
+            <p>%</p>
+            <small className={`status-${spo2Status.toLowerCase()}`}>{spo2Status}</small>
+          </div>
 
-        <h2>Real-Time Sensor Graph</h2>
+          <div className="vital-card orange">
+            <span>🌡 Temperature</span>
+            <h2>{latest ? latest.temp : "--"}</h2>
+            <p>°C</p>
+            <small className={`status-${tempStatus.toLowerCase()}`}>{tempStatus}</small>
+          </div>
 
-        <Line data={chartData} />
+          <div className="vital-card blue">
+            <span>📶 Monitoring</span>
+            <h2>{running ? "ON" : "OFF"}</h2>
+            <p>Cloud Sync</p>
+            <small>{running ? "Data receiving" : "Paused"}</small>
+          </div>
+        </div>
 
-      </div>
+        <div className="range-panel">
+          <div><span>HR Normal Range</span><b>60–100 BPM</b></div>
+          <div><span>SpO₂ Normal Range</span><b>95–100%</b></div>
+          <div><span>Temp Normal Range</span><b>36.5–37.5 °C</b></div>
+        </div>
 
-      <div className="buttons">
+        <div className="graph-panel">
+          <div className="graph-header">
+            <h3>Live Vital Trends</h3>
+            <p>Real-time monitoring of heart rate, oxygen saturation and body temperature</p>
+          </div>
 
-        <button onClick={fetchData}>
-          Refresh Data
-        </button>
+          <div className="graphs-grid">
+            <div className="graph-card heart">
+              <div className="graph-title">
+                <span>Heart Rate</span>
+                <b>{latest ? latest.hr : "--"} BPM</b>
+              </div>
+              <div className="chart-box">
+                <Line data={chartData("Heart Rate", hrHistory, "#ef4444")} options={chartOptions(40, 150, "BPM")} />
+              </div>
+            </div>
 
-        <button
-          onClick={() =>
-            window.open(
-              "http://localhost:1880/ui",
-              "_blank"
-            )
-          }
-        >
-          Open Node-RED
-        </button>
+            <div className="graph-card oxygen">
+              <div className="graph-title">
+                <span>SpO₂</span>
+                <b>{latest ? latest.spo2 : "--"}%</b>
+              </div>
+              <div className="chart-box">
+                <Line data={chartData("SpO₂", spo2History, "#22c55e")} options={chartOptions(85, 100, "%")} />
+              </div>
+            </div>
 
-        <button
-          className="stop"
-          onClick={() =>
-            setRunning(!running)
-          }
-        >
-          {running
-            ? "Stop Monitoring"
-            : "Start Monitoring"}
-        </button>
+            <div className="graph-card temp">
+              <div className="graph-title">
+                <span>Temperature</span>
+                <b>{latest ? latest.temp : "--"} °C</b>
+              </div>
+              <div className="chart-box">
+                <Line data={chartData("Temperature", tempHistory, "#f59e0b")} options={chartOptions(34, 40, "°C")} />
+              </div>
+            </div>
+          </div>
+        </div>
 
-      </div>
+        <div className="controls">
+          <button onClick={fetchData}>Refresh</button>
+          <button onClick={() => setRunning(!running)}>
+            {running ? "Stop Monitoring" : "Start Monitoring"}
+          </button>
+          <button onClick={() => setShowTable(!showTable)}>
+            {showTable ? "Hide Supabase Table" : "Show Supabase Table"}
+          </button>
+          <button onClick={downloadCSV}>Export CSV</button>
+          <button onClick={() => window.open("http://localhost:1880/ui", "_blank")}>
+            Open Node-RED
+          </button>
+        </div>
 
-      <div className="alarm-panel">
+        {showTable && (
+          <div className="table-panel">
+            <h3>Supabase Latest Records</h3>
 
-        <h2>Alarm Panel</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>HR</th>
+                  <th>SpO₂</th>
+                  <th>Temp</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
 
-        {!hrAlarm &&
-          !spo2Alarm &&
-          !smokeAlarm && (
-            <p className="safe">
-              ✅ All Parameters Normal
-            </p>
-          )}
-
-        {hrAlarm && (
-          <p className="danger">
-            ⚠ Heart Rate Abnormal
-          </p>
+              <tbody>
+                {records.map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.id}</td>
+                    <td>{row.hr}</td>
+                    <td>{row.spo2}</td>
+                    <td>{row.temp}</td>
+                    <td>{new Date(row.created_at).toLocaleTimeString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
-        {spo2Alarm && (
-          <p className="danger">
-            ⚠ Low SpO₂ Detected
-          </p>
-        )}
-
-        {smokeAlarm && (
-          <p className="danger">
-            ⚠ Smoke Level High
-          </p>
-        )}
-
-      </div>
-
-      <div className="status">
-
-        <div className="row">
-          <span>Database</span>
-          <b>Connected</b>
+        <div className="footer">
+          <span>Database: Supabase Connected</span>
+          <span>
+            Last Update:{" "}
+            {latest?.created_at ? new Date(latest.created_at).toLocaleString() : "Waiting"}
+          </span>
         </div>
-
-        <div className="row">
-          <span>Last Update</span>
-
-          <b>
-            {data?.created_at
-              ? new Date(
-                  data.created_at
-                ).toLocaleString()
-              : "Waiting"}
-          </b>
-        </div>
-
       </div>
-
     </div>
   );
 }
