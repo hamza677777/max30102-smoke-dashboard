@@ -26,18 +26,33 @@ function App() {
   const [showTable, setShowTable] = useState(false);
   const [theme, setTheme] = useState("hospital");
   const [time, setTime] = useState(new Date());
+  const [alarmMuted, setAlarmMuted] = useState(false);
+
+  const [patient, setPatient] = useState(() => {
+    const saved = localStorage.getItem("patient_details");
+    return saved
+      ? JSON.parse(saved)
+      : {
+          name: "",
+          age: "",
+          gender: "",
+          patientId: "P-001",
+          condition: "",
+        };
+  });
 
   const [hrHistory, setHrHistory] = useState([]);
   const [spo2History, setSpo2History] = useState([]);
   const [tempHistory, setTempHistory] = useState([]);
   const [ecgHistory, setEcgHistory] = useState([]);
+  const [labels, setLabels] = useState([]);
 
   async function fetchData() {
     const { data, error } = await supabase
       .from("vitals")
       .select("*")
       .order("id", { ascending: false })
-      .limit(30);
+      .limit(60);
 
     if (error) {
       console.log(error);
@@ -45,38 +60,49 @@ function App() {
     }
 
     if (data && data.length > 0) {
-      const row = data[0];
+      const latestRow = data[0];
 
       const clean = {
-        id: row.id,
-        device_id: row.device_id || "TDX-001",
-        hr: Number(row.heart_rate ?? 0),
-        spo2: Number(row.spo2 ?? 0),
-        temp: Number(row.body_temp ?? 0),
-        ecg: Number(row.ecg_value ?? 0),
-        fever: row.fever_status || "Normal",
-        hrType: row.hr_status || "Normal",
-        rhythm: row.rhythm_status || "Checking",
-        health: row.health_status || "Normal",
-        created_at: row.created_at,
+        id: latestRow.id,
+        device_id: latestRow.device_id || "TDX-001",
+        hr: Number(latestRow.heart_rate ?? 0),
+        spo2: Number(latestRow.spo2 ?? 0),
+        temp: Number(latestRow.body_temp ?? 0),
+        ecg: Number(latestRow.ecg_value ?? 0),
+        fever: latestRow.fever_status || "Normal",
+        hrType: latestRow.hr_status || "Normal",
+        rhythm: latestRow.rhythm_status || "Checking",
+        health: latestRow.health_status || "Normal",
+        created_at: latestRow.created_at,
       };
 
       setLatest(clean);
       setRecords(data);
 
       if (running) {
-        setHrHistory((prev) => [...prev.slice(-29), clean.hr]);
-        setSpo2History((prev) => [...prev.slice(-29), clean.spo2]);
-        setTempHistory((prev) => [...prev.slice(-29), clean.temp]);
-        setEcgHistory((prev) => [...prev.slice(-79), clean.ecg]);
+        const ordered = [...data].reverse();
+
+        setLabels(
+          ordered.map((r) =>
+            new Date(r.created_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })
+          )
+        );
+
+        setHrHistory(ordered.map((r) => Number(r.heart_rate ?? 0)));
+        setSpo2History(ordered.map((r) => Number(r.spo2 ?? 0)));
+        setTempHistory(ordered.map((r) => Number(r.body_temp ?? 0)));
+        setEcgHistory(ordered.map((r) => Number(r.ecg_value ?? 0)));
       }
     }
   }
 
   useEffect(() => {
     fetchData();
-
-    const dataTimer = setInterval(fetchData, 1000);
+    const dataTimer = setInterval(fetchData, 1500);
     const clockTimer = setInterval(() => setTime(new Date()), 1000);
 
     return () => {
@@ -85,30 +111,93 @@ function App() {
     };
   }, [running]);
 
+  function updatePatient(field, value) {
+    const updated = { ...patient, [field]: value };
+    setPatient(updated);
+    localStorage.setItem("patient_details", JSON.stringify(updated));
+  }
+
+  function statusClass(value) {
+    return String(value || "waiting")
+      .toLowerCase()
+      .replaceAll(" ", "-");
+  }
+
+  function getAlarm() {
+    if (!latest) {
+      return {
+        level: "waiting",
+        title: "Waiting for Data",
+        msg: "No live reading received yet.",
+      };
+    }
+
+    if (latest.health === "No Finger" || latest.hrType === "No Finger") {
+      return {
+        level: "sensor",
+        title: "Sensor Alert",
+        msg: "Place finger on MAX30102 sensor for HR and SpO₂ readings.",
+      };
+    }
+
+    if (
+      latest.health === "Critical" ||
+      latest.spo2 < 90 ||
+      latest.temp >= 39 ||
+      latest.hr > 130 ||
+      (latest.hr > 0 && latest.hr < 45)
+    ) {
+      return {
+        level: "critical",
+        title: "Critical Alarm",
+        msg: "Patient vitals are outside safe range. Immediate attention required.",
+      };
+    }
+
+    if (
+      latest.health === "Warning" ||
+      latest.hrType === "Tachy" ||
+      latest.hrType === "Brady" ||
+      latest.fever === "Fever" ||
+      latest.rhythm === "Irregular" ||
+      latest.spo2 < 95
+    ) {
+      return {
+        level: "warning",
+        title: "Warning Alarm",
+        msg: "Vitals need observation. Check sensor placement and patient condition.",
+      };
+    }
+
+    return {
+      level: "normal",
+      title: "Normal",
+      msg: "All received vitals are within acceptable monitoring range.",
+    };
+  }
+
+  const alarm = getAlarm();
+
   const hrStatus = latest?.hrType || "Waiting";
-
   const spo2Status =
-    !latest ? "Waiting" : latest.spo2 < 90 ? "Critical" : latest.spo2 < 95 ? "Warning" : "Normal";
-
-  const tempStatus =
-    !latest ? "Waiting" : latest.temp >= 38 ? "Warning" : "Normal";
-
+    !latest ? "Waiting" : latest.spo2 === 0 ? "No Finger" : latest.spo2 < 90 ? "Critical" : latest.spo2 < 95 ? "Warning" : "Normal";
+  const tempStatus = !latest ? "Waiting" : latest.temp >= 38 ? "Warning" : "Normal";
   const overallStatus = latest?.health || "Waiting";
 
-  function chartData(title, values, color, fill = true) {
+  function chartData(title, values, color, fill = false) {
     return {
-      labels: values.map((_, i) => i + 1),
+      labels,
       datasets: [
         {
           label: title,
           data: values,
           borderColor: color,
-          backgroundColor: fill ? color + "2e" : "transparent",
-          fill: fill,
-          tension: title === "ECG" ? 0.15 : 0.45,
+          backgroundColor: fill ? color + "25" : "transparent",
+          fill,
+          tension: title === "ECG" ? 0.18 : 0.38,
           borderWidth: title === "ECG" ? 2 : 3,
           pointRadius: 0,
-          pointHoverRadius: 3,
+          pointHoverRadius: 4,
         },
       ],
     };
@@ -136,8 +225,8 @@ function App() {
           min,
           max,
           ticks: {
-            color: "#94a3b8",
-            font: { size: 11 },
+            color: "#93a4b8",
+            font: { size: 10 },
           },
           grid: {
             color: "rgba(148,163,184,0.12)",
@@ -148,10 +237,10 @@ function App() {
   }
 
   function downloadCSV() {
-    let csv = "ID,Device ID,HR,SpO2,Temp,ECG,Fever,HR Status,Rhythm,Health,Time\n";
+    let csv = "ID,Device ID,Patient,HR,SpO2,Temp,ECG,Fever,HR Status,Rhythm,Health,Time\n";
 
     records.forEach((r) => {
-      csv += `${r.id},${r.device_id},${r.heart_rate},${r.spo2},${r.body_temp},${r.ecg_value},${r.fever_status},${r.hr_status},${r.rhythm_status},${r.health_status},${r.created_at}\n`;
+      csv += `${r.id},${r.device_id},${patient.name},${r.heart_rate},${r.spo2},${r.body_temp},${r.ecg_value},${r.fever_status},${r.hr_status},${r.rhythm_status},${r.health_status},${r.created_at}\n`;
     });
 
     const blob = new Blob([csv], { type: "text/csv" });
@@ -159,7 +248,7 @@ function App() {
     const a = document.createElement("a");
 
     a.href = url;
-    a.download = "vitals_data.csv";
+    a.download = "teledx_vitals_data.csv";
     a.click();
   }
 
@@ -188,6 +277,57 @@ function App() {
           </div>
         </div>
 
+        <div className={`alarm-banner alarm-${alarm.level} ${alarmMuted ? "muted" : ""}`}>
+          <div>
+            <span className="alarm-dot"></span>
+            <b>{alarmMuted ? "Alarm Muted" : alarm.title}</b>
+            <p>{alarm.msg}</p>
+          </div>
+
+          <button onClick={() => setAlarmMuted(!alarmMuted)}>
+            {alarmMuted ? "Unmute Alarm" : "Mute Alarm"}
+          </button>
+        </div>
+
+        <div className="patient-panel">
+          <div className="patient-title">
+            <h3>Patient Details</h3>
+            <p>Manual entry for current monitoring session</p>
+          </div>
+
+          <div className="patient-form">
+            <input
+              placeholder="Patient Name"
+              value={patient.name}
+              onChange={(e) => updatePatient("name", e.target.value)}
+            />
+
+            <input
+              placeholder="Patient ID"
+              value={patient.patientId}
+              onChange={(e) => updatePatient("patientId", e.target.value)}
+            />
+
+            <input
+              placeholder="Age"
+              value={patient.age}
+              onChange={(e) => updatePatient("age", e.target.value)}
+            />
+
+            <select value={patient.gender} onChange={(e) => updatePatient("gender", e.target.value)}>
+              <option value="">Gender</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+
+            <input
+              placeholder="Condition / Notes"
+              value={patient.condition}
+              onChange={(e) => updatePatient("condition", e.target.value)}
+            />
+          </div>
+        </div>
+
         <div className="system-panel">
           <div>
             <span>Device ID</span>
@@ -195,8 +335,8 @@ function App() {
           </div>
 
           <div>
-            <span>System Mode</span>
-            <b>Live Monitoring</b>
+            <span>Patient</span>
+            <b>{patient.name || "Not Entered"}</b>
           </div>
 
           <div>
@@ -206,58 +346,53 @@ function App() {
 
           <div>
             <span>Overall Status</span>
-            <b className={`status-${overallStatus.toLowerCase()}`}>{overallStatus}</b>
+            <b className={`status-${statusClass(overallStatus)}`}>{overallStatus}</b>
           </div>
         </div>
 
-        <div className="vital-cards">
+        <div className="vital-cards compact">
           <div className="vital-card red">
             <span>❤️ Heart Rate</span>
             <h2>{latest ? latest.hr : "--"}</h2>
             <p>BPM</p>
-            <small className={`status-${hrStatus.toLowerCase()}`}>{hrStatus}</small>
+            <small className={`status-${statusClass(hrStatus)}`}>{hrStatus}</small>
           </div>
 
           <div className="vital-card green">
             <span>🫁 SpO₂</span>
             <h2>{latest ? latest.spo2 : "--"}</h2>
             <p>%</p>
-            <small className={`status-${spo2Status.toLowerCase()}`}>{spo2Status}</small>
+            <small className={`status-${statusClass(spo2Status)}`}>{spo2Status}</small>
           </div>
 
           <div className="vital-card orange">
             <span>🌡 Temperature</span>
             <h2>{latest ? latest.temp : "--"}</h2>
             <p>°C</p>
-            <small className={`status-${tempStatus.toLowerCase()}`}>{tempStatus}</small>
+            <small className={`status-${statusClass(tempStatus)}`}>{tempStatus}</small>
           </div>
 
           <div className="vital-card blue">
             <span>🫀 ECG Signal</span>
             <h2>{latest ? latest.ecg : "--"}</h2>
-            <p>ADC Value</p>
-            <small>{latest?.rhythm || "Waiting"}</small>
+            <p>ADC</p>
+            <small className={`status-${statusClass(latest?.rhythm || "Waiting")}`}>
+              {latest?.rhythm || "Waiting"}
+            </small>
           </div>
         </div>
 
-        <div className="range-panel">
-          <div><span>HR Normal Range</span><b>60–100 BPM</b></div>
-          <div><span>SpO₂ Normal Range</span><b>95–100%</b></div>
-          <div><span>Temp Normal Range</span><b>36.5–37.5 °C</b></div>
-          <div><span>ECG ADC Range</span><b>1500–2600</b></div>
-        </div>
-
-        <div className="range-panel">
-          <div><span>Fever Status</span><b>{latest?.fever || "--"}</b></div>
-          <div><span>HR Type</span><b>{latest?.hrType || "--"}</b></div>
-          <div><span>Rhythm</span><b>{latest?.rhythm || "--"}</b></div>
-          <div><span>Health Status</span><b>{latest?.health || "--"}</b></div>
+        <div className="mini-status">
+          <div><span>Fever</span><b className={`status-${statusClass(latest?.fever)}`}>{latest?.fever || "--"}</b></div>
+          <div><span>HR Type</span><b className={`status-${statusClass(latest?.hrType)}`}>{latest?.hrType || "--"}</b></div>
+          <div><span>Rhythm</span><b className={`status-${statusClass(latest?.rhythm)}`}>{latest?.rhythm || "--"}</b></div>
+          <div><span>Health</span><b className={`status-${statusClass(latest?.health)}`}>{latest?.health || "--"}</b></div>
         </div>
 
         <div className="graph-panel">
           <div className="graph-header">
-            <h3>Live Vital Trends</h3>
-            <p>Real-time HR, SpO₂, temperature and ECG monitoring</p>
+            <h3>Live Monitoring Graphs</h3>
+            <p>Real-time trends from Supabase live vitals table</p>
           </div>
 
           <div className="graphs-grid">
@@ -267,10 +402,7 @@ function App() {
                 <b>{latest ? latest.hr : "--"} BPM</b>
               </div>
               <div className="chart-box">
-                <Line
-                  data={chartData("Heart Rate", hrHistory, "#ef4444")}
-                  options={chartOptions(40, 150, "BPM")}
-                />
+                <Line data={chartData("Heart Rate", hrHistory, "#ef4444", true)} options={chartOptions(40, 150, "BPM")} />
               </div>
             </div>
 
@@ -280,10 +412,7 @@ function App() {
                 <b>{latest ? latest.spo2 : "--"}%</b>
               </div>
               <div className="chart-box">
-                <Line
-                  data={chartData("SpO₂", spo2History, "#22c55e")}
-                  options={chartOptions(85, 100, "%")}
-                />
+                <Line data={chartData("SpO₂", spo2History, "#22c55e", true)} options={chartOptions(85, 100, "%")} />
               </div>
             </div>
 
@@ -293,10 +422,7 @@ function App() {
                 <b>{latest ? latest.temp : "--"} °C</b>
               </div>
               <div className="chart-box">
-                <Line
-                  data={chartData("Temperature", tempHistory, "#f59e0b")}
-                  options={chartOptions(34, 40, "°C")}
-                />
+                <Line data={chartData("Temperature", tempHistory, "#f59e0b", true)} options={chartOptions(34, 40, "°C")} />
               </div>
             </div>
 
@@ -306,10 +432,7 @@ function App() {
                 <b>{latest ? latest.ecg : "--"}</b>
               </div>
               <div className="chart-box">
-                <Line
-                  data={chartData("ECG", ecgHistory, "#3b82f6", false)}
-                  options={chartOptions(1500, 2600, "")}
-                />
+                <Line data={chartData("ECG", ecgHistory, "#38bdf8", false)} options={chartOptions(1500, 2600, "")} />
               </div>
             </div>
           </div>
@@ -327,10 +450,6 @@ function App() {
           </button>
 
           <button onClick={downloadCSV}>Export CSV</button>
-
-          <button onClick={() => window.open("http://localhost:1880/ui", "_blank")}>
-            Open Node-RED
-          </button>
         </div>
 
         {showTable && (

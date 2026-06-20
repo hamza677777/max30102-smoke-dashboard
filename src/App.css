@@ -29,27 +29,29 @@ body {
 }
 
 .container {
-  max-width: 1220px;
+  max-width: 1240px;
   margin: auto;
-  padding: 18px;
+  padding: 14px;
 }
 
 .topbar,
 .system-panel,
 .vital-card,
-.range-panel div,
+.mini-status div,
+.patient-panel,
 .graph-panel,
 .graph-card,
 .table-panel,
-.footer {
+.footer,
+.alarm-banner {
   background: rgba(15, 23, 42, 0.94);
   border: 1px solid rgba(56, 189, 248, 0.22);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
 }
 
 .topbar {
-  border-radius: 18px;
-  padding: 17px 22px;
+  border-radius: 16px;
+  padding: 14px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -57,12 +59,13 @@ body {
 
 .topbar h1 {
   margin: 0;
-  font-size: 27px;
+  font-size: 25px;
 }
 
 .topbar p {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   color: #bfdbfe;
+  font-size: 14px;
 }
 
 .top-actions {
@@ -72,17 +75,23 @@ body {
 }
 
 select,
-.clock {
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: none;
-  background: #334155;
+.clock,
+input {
+  padding: 9px 11px;
+  border-radius: 11px;
+  border: 1px solid rgba(125, 211, 252, 0.25);
+  background: #1e293b;
   color: white;
   font-weight: 700;
+  outline: none;
+}
+
+input::placeholder {
+  color: #94a3b8;
 }
 
 .badge {
-  padding: 10px 18px;
+  padding: 9px 17px;
   border-radius: 22px;
   font-weight: bold;
 }
@@ -95,10 +104,130 @@ select,
   background: #64748b;
 }
 
-.system-panel {
-  margin-top: 14px;
+.alarm-banner {
+  margin-top: 12px;
+  border-radius: 16px;
+  padding: 13px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.alarm-banner b {
+  display: inline-block;
+  font-size: 17px;
+  margin-left: 8px;
+}
+
+.alarm-banner p {
+  margin: 5px 0 0 25px;
+  color: #cbd5e1;
+  font-size: 14px;
+}
+
+.alarm-dot {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 18px #22c55e;
+}
+
+.alarm-normal {
+  border-color: rgba(34, 197, 94, 0.55);
+}
+
+.alarm-warning {
+  border-color: rgba(245, 158, 11, 0.75);
+}
+
+.alarm-warning .alarm-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 18px #f59e0b;
+}
+
+.alarm-critical {
+  border-color: rgba(239, 68, 68, 0.85);
+  animation: alarmPulse 1.2s infinite;
+}
+
+.alarm-critical .alarm-dot {
+  background: #ef4444;
+  box-shadow: 0 0 18px #ef4444;
+}
+
+.alarm-sensor {
+  border-color: rgba(250, 204, 21, 0.85);
+}
+
+.alarm-sensor .alarm-dot {
+  background: #facc15;
+  box-shadow: 0 0 18px #facc15;
+}
+
+.alarm-waiting {
+  border-color: rgba(148, 163, 184, 0.55);
+}
+
+.alarm-waiting .alarm-dot {
+  background: #94a3b8;
+  box-shadow: 0 0 18px #94a3b8;
+}
+
+.alarm-banner.muted {
+  opacity: 0.72;
+}
+
+@keyframes alarmPulse {
+  0% {
+    box-shadow: 0 0 0 rgba(239, 68, 68, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 24px rgba(239, 68, 68, 0.45);
+  }
+
+  100% {
+    box-shadow: 0 0 0 rgba(239, 68, 68, 0.2);
+  }
+}
+
+.patient-panel {
+  margin-top: 12px;
   border-radius: 16px;
   padding: 14px;
+}
+
+.patient-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 11px;
+}
+
+.patient-title h3 {
+  margin: 0;
+  color: #38bdf8;
+}
+
+.patient-title p {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.patient-form {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 0.7fr 0.8fr 1.8fr;
+  gap: 10px;
+}
+
+.system-panel {
+  margin-top: 12px;
+  border-radius: 16px;
+  padding: 12px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
@@ -106,7 +235,7 @@ select,
 
 .system-panel div {
   background: rgba(2, 6, 23, 0.65);
-  padding: 12px;
+  padding: 11px;
   border-radius: 12px;
   text-align: center;
 }
@@ -114,50 +243,51 @@ select,
 .system-panel span {
   display: block;
   color: #94a3b8;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .system-panel b {
   display: block;
-  margin-top: 5px;
-  font-size: 16px;
+  margin-top: 4px;
+  font-size: 15px;
 }
 
 .vital-cards {
-  margin-top: 14px;
+  margin-top: 12px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
+  gap: 12px;
 }
 
 .vital-card {
   border-radius: 16px;
-  padding: 13px;
+  padding: 11px;
   text-align: center;
-  min-height: 118px;
+  min-height: 104px;
 }
 
 .vital-card span {
   color: #7dd3fc;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .vital-card h2 {
-  margin: 8px 0 2px;
-  font-size: 31px;
+  margin: 7px 0 1px;
+  font-size: 28px;
 }
 
 .vital-card p {
   margin: 0;
   color: #cbd5e1;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .vital-card small {
   display: inline-block;
-  margin-top: 6px;
+  margin-top: 5px;
   font-weight: bold;
+  font-size: 13px;
 }
 
 .red {
@@ -192,8 +322,8 @@ select,
   color: #94a3b8;
 }
 
-.status-no,
-.status-no-finger {
+.status-no-finger,
+.status-checking {
   color: #facc15;
 }
 
@@ -204,40 +334,35 @@ select,
   color: #ef4444;
 }
 
-.status-checking {
-  color: #facc15;
-}
-
-.range-panel {
-  margin-top: 14px;
+.mini-status {
+  margin-top: 12px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
+  gap: 12px;
 }
 
-.range-panel div {
-  border-radius: 16px;
-  padding: 13px;
+.mini-status div {
+  border-radius: 15px;
+  padding: 11px;
   text-align: center;
 }
 
-.range-panel span {
+.mini-status span {
   display: block;
   color: #94a3b8;
-  font-size: 13px;
+  font-size: 12px;
 }
 
-.range-panel b {
+.mini-status b {
   display: block;
-  margin-top: 5px;
-  font-size: 17px;
-  color: #e0f2fe;
+  margin-top: 4px;
+  font-size: 16px;
 }
 
 .graph-panel {
-  margin-top: 14px;
+  margin-top: 12px;
   border-radius: 18px;
-  padding: 16px;
+  padding: 14px;
 }
 
 .graph-header h3 {
@@ -248,21 +373,21 @@ select,
 }
 
 .graph-header p {
-  margin: 5px 0 14px;
+  margin: 5px 0 13px;
   text-align: center;
   color: #94a3b8;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .graphs-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
+  gap: 12px;
 }
 
 .graph-card {
   border-radius: 16px;
-  padding: 13px;
+  padding: 12px;
   overflow: hidden;
 }
 
@@ -279,14 +404,14 @@ select,
 }
 
 .graph-card.ecg {
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid #38bdf8;
 }
 
 .graph-title {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .graph-title span {
@@ -296,15 +421,15 @@ select,
 
 .graph-title b {
   color: #e0f2fe;
-  font-size: 18px;
+  font-size: 17px;
 }
 
 .chart-box {
-  height: 220px;
+  height: 190px;
 }
 
 .controls {
-  margin: 15px 0;
+  margin: 14px 0;
   display: flex;
   gap: 10px;
   justify-content: center;
@@ -313,7 +438,7 @@ select,
 
 button {
   border: none;
-  padding: 10px 16px;
+  padding: 10px 15px;
   border-radius: 12px;
   background: #0284c7;
   color: white;
@@ -326,9 +451,9 @@ button:hover {
 }
 
 .table-panel {
-  margin-top: 14px;
+  margin-top: 12px;
   border-radius: 18px;
-  padding: 16px;
+  padding: 14px;
   overflow-x: auto;
 }
 
@@ -341,12 +466,12 @@ button:hover {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 th,
 td {
-  padding: 10px;
+  padding: 9px;
   text-align: center;
   border-bottom: 1px solid rgba(148, 163, 184, 0.25);
 }
@@ -356,16 +481,20 @@ th {
 }
 
 .footer {
-  margin-top: 14px;
+  margin-top: 12px;
   border-radius: 16px;
-  padding: 13px 16px;
+  padding: 12px 15px;
   display: flex;
   justify-content: space-between;
   color: #dbeafe;
-  font-size: 14px;
+  font-size: 13px;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1100px) {
+  .patient-form {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .graphs-grid {
     grid-template-columns: 1fr;
   }
@@ -373,20 +502,27 @@ th {
 
 @media (max-width: 950px) {
   .topbar,
-  .footer {
+  .footer,
+  .patient-title,
+  .alarm-banner {
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     text-align: center;
   }
 
   .system-panel,
   .vital-cards,
-  .range-panel,
+  .mini-status,
+  .patient-form,
   .graphs-grid {
     grid-template-columns: 1fr;
   }
 
   .top-actions {
     flex-direction: column;
+  }
+
+  .alarm-banner p {
+    margin-left: 0;
   }
 }
