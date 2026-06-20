@@ -27,28 +27,37 @@ function App() {
   const [theme, setTheme] = useState("hospital");
   const [time, setTime] = useState(new Date());
 
-  const [labels, setLabels] = useState([]);
   const [hrHistory, setHrHistory] = useState([]);
   const [spo2History, setSpo2History] = useState([]);
   const [tempHistory, setTempHistory] = useState([]);
+  const [ecgHistory, setEcgHistory] = useState([]);
 
   async function fetchData() {
     const { data, error } = await supabase
-      .from("patient_data")
-      .select("id, hr, spo2, temp, created_at")
+      .from("vitals")
+      .select("*")
       .order("id", { ascending: false })
-      .limit(10);
+      .limit(30);
 
-    if (error) return;
+    if (error) {
+      console.log(error);
+      return;
+    }
 
     if (data && data.length > 0) {
       const row = data[0];
 
       const clean = {
         id: row.id,
-        hr: Number(row.hr ?? 0),
+        device_id: row.device_id || "TDX-001",
+        hr: Number(row.heart_rate ?? 0),
         spo2: Number(row.spo2 ?? 0),
-        temp: Number(row.temp ?? 0),
+        temp: Number(row.body_temp ?? 0),
+        ecg: Number(row.ecg_value ?? 0),
+        fever: row.fever_status || "Normal",
+        hrType: row.hr_status || "Normal",
+        rhythm: row.rhythm_status || "Checking",
+        health: row.health_status || "Normal",
         created_at: row.created_at,
       };
 
@@ -56,17 +65,18 @@ function App() {
       setRecords(data);
 
       if (running) {
-        setLabels((prev) => [...prev.slice(-17), new Date().toLocaleTimeString()]);
-        setHrHistory((prev) => [...prev.slice(-17), clean.hr]);
-        setSpo2History((prev) => [...prev.slice(-17), clean.spo2]);
-        setTempHistory((prev) => [...prev.slice(-17), clean.temp]);
+        setHrHistory((prev) => [...prev.slice(-29), clean.hr]);
+        setSpo2History((prev) => [...prev.slice(-29), clean.spo2]);
+        setTempHistory((prev) => [...prev.slice(-29), clean.temp]);
+        setEcgHistory((prev) => [...prev.slice(-79), clean.ecg]);
       }
     }
   }
 
   useEffect(() => {
     fetchData();
-    const dataTimer = setInterval(fetchData, 2000);
+
+    const dataTimer = setInterval(fetchData, 1000);
     const clockTimer = setInterval(() => setTime(new Date()), 1000);
 
     return () => {
@@ -75,38 +85,30 @@ function App() {
     };
   }, [running]);
 
-  const hrStatus =
-    !latest ? "Waiting" : latest.hr < 50 || latest.hr > 120 ? "Critical" : latest.hr > 100 ? "Warning" : "Normal";
+  const hrStatus = latest?.hrType || "Waiting";
 
   const spo2Status =
     !latest ? "Waiting" : latest.spo2 < 90 ? "Critical" : latest.spo2 < 95 ? "Warning" : "Normal";
 
   const tempStatus =
-    !latest ? "Waiting" : latest.temp < 35 || latest.temp > 38 ? "Critical" : latest.temp > 37.5 ? "Warning" : "Normal";
+    !latest ? "Waiting" : latest.temp >= 38 ? "Warning" : "Normal";
 
-  const overallStatus =
-    hrStatus === "Critical" || spo2Status === "Critical" || tempStatus === "Critical"
-      ? "Critical"
-      : hrStatus === "Warning" || spo2Status === "Warning" || tempStatus === "Warning"
-      ? "Warning"
-      : latest
-      ? "Normal"
-      : "Waiting";
+  const overallStatus = latest?.health || "Waiting";
 
-  function chartData(title, values, color) {
+  function chartData(title, values, color, fill = true) {
     return {
-      labels,
+      labels: values.map((_, i) => i + 1),
       datasets: [
         {
           label: title,
           data: values,
           borderColor: color,
-          backgroundColor: color + "2e",
-          fill: true,
-          tension: 0.45,
-          borderWidth: 3,
+          backgroundColor: fill ? color + "2e" : "transparent",
+          fill: fill,
+          tension: title === "ECG" ? 0.15 : 0.45,
+          borderWidth: title === "ECG" ? 2 : 3,
           pointRadius: 0,
-          pointHoverRadius: 4,
+          pointHoverRadius: 3,
         },
       ],
     };
@@ -116,7 +118,7 @@ function App() {
     return {
       responsive: true,
       maintainAspectRatio: false,
-      animation: { duration: 350 },
+      animation: false,
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -146,9 +148,10 @@ function App() {
   }
 
   function downloadCSV() {
-    let csv = "ID,HR,SpO2,Temp,Time\n";
+    let csv = "ID,Device ID,HR,SpO2,Temp,ECG,Fever,HR Status,Rhythm,Health,Time\n";
+
     records.forEach((r) => {
-      csv += `${r.id},${r.hr},${r.spo2},${r.temp},${r.created_at}\n`;
+      csv += `${r.id},${r.device_id},${r.heart_rate},${r.spo2},${r.body_temp},${r.ecg_value},${r.fever_status},${r.hr_status},${r.rhythm_status},${r.health_status},${r.created_at}\n`;
     });
 
     const blob = new Blob([csv], { type: "text/csv" });
@@ -156,7 +159,7 @@ function App() {
     const a = document.createElement("a");
 
     a.href = url;
-    a.download = "patient_data.csv";
+    a.download = "vitals_data.csv";
     a.click();
   }
 
@@ -166,7 +169,7 @@ function App() {
         <div className="topbar">
           <div>
             <h1>TeleDx Pro</h1>
-            <p>Smart Remote Monitoring System</p>
+            <p>Portable Telemedicine Diagnostic & Remote Monitoring System</p>
           </div>
 
           <div className="top-actions">
@@ -188,7 +191,7 @@ function App() {
         <div className="system-panel">
           <div>
             <span>Device ID</span>
-            <b>TDX-001</b>
+            <b>{latest?.device_id || "TDX-001"}</b>
           </div>
 
           <div>
@@ -230,10 +233,10 @@ function App() {
           </div>
 
           <div className="vital-card blue">
-            <span>📶 Monitoring</span>
-            <h2>{running ? "ON" : "OFF"}</h2>
-            <p>Cloud Sync</p>
-            <small>{running ? "Data receiving" : "Paused"}</small>
+            <span>🫀 ECG Signal</span>
+            <h2>{latest ? latest.ecg : "--"}</h2>
+            <p>ADC Value</p>
+            <small>{latest?.rhythm || "Waiting"}</small>
           </div>
         </div>
 
@@ -241,12 +244,20 @@ function App() {
           <div><span>HR Normal Range</span><b>60–100 BPM</b></div>
           <div><span>SpO₂ Normal Range</span><b>95–100%</b></div>
           <div><span>Temp Normal Range</span><b>36.5–37.5 °C</b></div>
+          <div><span>ECG ADC Range</span><b>1500–2600</b></div>
+        </div>
+
+        <div className="range-panel">
+          <div><span>Fever Status</span><b>{latest?.fever || "--"}</b></div>
+          <div><span>HR Type</span><b>{latest?.hrType || "--"}</b></div>
+          <div><span>Rhythm</span><b>{latest?.rhythm || "--"}</b></div>
+          <div><span>Health Status</span><b>{latest?.health || "--"}</b></div>
         </div>
 
         <div className="graph-panel">
           <div className="graph-header">
             <h3>Live Vital Trends</h3>
-            <p>Real-time monitoring of heart rate, oxygen saturation and body temperature</p>
+            <p>Real-time HR, SpO₂, temperature and ECG monitoring</p>
           </div>
 
           <div className="graphs-grid">
@@ -256,7 +267,10 @@ function App() {
                 <b>{latest ? latest.hr : "--"} BPM</b>
               </div>
               <div className="chart-box">
-                <Line data={chartData("Heart Rate", hrHistory, "#ef4444")} options={chartOptions(40, 150, "BPM")} />
+                <Line
+                  data={chartData("Heart Rate", hrHistory, "#ef4444")}
+                  options={chartOptions(40, 150, "BPM")}
+                />
               </div>
             </div>
 
@@ -266,7 +280,10 @@ function App() {
                 <b>{latest ? latest.spo2 : "--"}%</b>
               </div>
               <div className="chart-box">
-                <Line data={chartData("SpO₂", spo2History, "#22c55e")} options={chartOptions(85, 100, "%")} />
+                <Line
+                  data={chartData("SpO₂", spo2History, "#22c55e")}
+                  options={chartOptions(85, 100, "%")}
+                />
               </div>
             </div>
 
@@ -276,7 +293,23 @@ function App() {
                 <b>{latest ? latest.temp : "--"} °C</b>
               </div>
               <div className="chart-box">
-                <Line data={chartData("Temperature", tempHistory, "#f59e0b")} options={chartOptions(34, 40, "°C")} />
+                <Line
+                  data={chartData("Temperature", tempHistory, "#f59e0b")}
+                  options={chartOptions(34, 40, "°C")}
+                />
+              </div>
+            </div>
+
+            <div className="graph-card ecg">
+              <div className="graph-title">
+                <span>ECG Wave</span>
+                <b>{latest ? latest.ecg : "--"}</b>
+              </div>
+              <div className="chart-box">
+                <Line
+                  data={chartData("ECG", ecgHistory, "#3b82f6", false)}
+                  options={chartOptions(1500, 2600, "")}
+                />
               </div>
             </div>
           </div>
@@ -284,13 +317,17 @@ function App() {
 
         <div className="controls">
           <button onClick={fetchData}>Refresh</button>
+
           <button onClick={() => setRunning(!running)}>
             {running ? "Stop Monitoring" : "Start Monitoring"}
           </button>
+
           <button onClick={() => setShowTable(!showTable)}>
             {showTable ? "Hide Supabase Table" : "Show Supabase Table"}
           </button>
+
           <button onClick={downloadCSV}>Export CSV</button>
+
           <button onClick={() => window.open("http://localhost:1880/ui", "_blank")}>
             Open Node-RED
           </button>
@@ -304,9 +341,15 @@ function App() {
               <thead>
                 <tr>
                   <th>ID</th>
+                  <th>Device</th>
                   <th>HR</th>
                   <th>SpO₂</th>
                   <th>Temp</th>
+                  <th>ECG</th>
+                  <th>Fever</th>
+                  <th>HR Type</th>
+                  <th>Rhythm</th>
+                  <th>Health</th>
                   <th>Time</th>
                 </tr>
               </thead>
@@ -315,9 +358,15 @@ function App() {
                 {records.map((row) => (
                   <tr key={row.id}>
                     <td>{row.id}</td>
-                    <td>{row.hr}</td>
+                    <td>{row.device_id}</td>
+                    <td>{row.heart_rate}</td>
                     <td>{row.spo2}</td>
-                    <td>{row.temp}</td>
+                    <td>{row.body_temp}</td>
+                    <td>{row.ecg_value}</td>
+                    <td>{row.fever_status}</td>
+                    <td>{row.hr_status}</td>
+                    <td>{row.rhythm_status}</td>
+                    <td>{row.health_status}</td>
                     <td>{new Date(row.created_at).toLocaleTimeString()}</td>
                   </tr>
                 ))}
@@ -327,7 +376,7 @@ function App() {
         )}
 
         <div className="footer">
-          <span>Database: Supabase Connected</span>
+          <span>Database: Supabase Vitals Connected</span>
           <span>
             Last Update:{" "}
             {latest?.created_at ? new Date(latest.created_at).toLocaleString() : "Waiting"}
