@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
   Chart as ChartJS,
@@ -45,6 +45,8 @@ function makeDemoECG(length = 80) {
 }
 
 function App() {
+  const chartRef = useRef(null);
+
   const [loggedIn, setLoggedIn] = useState(
     () => localStorage.getItem("teledx_login") === "true"
   );
@@ -152,7 +154,7 @@ function App() {
         setSpo2History(ordered.map((r) => Number(r.spo2 ?? 0)));
         setTempHistory(ordered.map((r) => Number(r.body_temp ?? 0)));
 
-        if (clean.ecgSamples.length > 20) {
+        if (clean.ecgSamples.length > 10) {
           setEcgHistory(clean.ecgSamples);
         } else {
           setEcgHistory(makeDemoECG(80));
@@ -165,7 +167,7 @@ function App() {
     if (!loggedIn) return;
 
     fetchData();
-    const dataTimer = setInterval(fetchData, 1500);
+    const dataTimer = setInterval(fetchData, 1000);
     const clockTimer = setInterval(() => setTime(new Date()), 1000);
 
     return () => {
@@ -253,6 +255,61 @@ function App() {
   function maxVal(arr) {
     const valid = arr.filter((v) => Number(v) > 0);
     return valid.length ? Math.max(...valid) : 0;
+  }
+
+  function saveGraph() {
+    if (!chartRef.current) return;
+
+    const link = document.createElement("a");
+    link.download = `${selectedVital || "vital"}_graph.png`;
+    link.href = chartRef.current.toBase64Image();
+    link.click();
+  }
+
+  function printGraph() {
+    if (!chartRef.current) return;
+
+    const image = chartRef.current.toBase64Image();
+    const win = window.open("", "_blank");
+
+    win.document.write(`
+      <html>
+        <head>
+          <title>TeleDx Pro Graph Report</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              text-align: center;
+              padding: 24px;
+            }
+            h2 {
+              margin-bottom: 4px;
+            }
+            p {
+              color: #444;
+              margin-top: 0;
+            }
+            img {
+              width: 100%;
+              max-width: 1000px;
+              border: 1px solid #ddd;
+              border-radius: 10px;
+            }
+          </style>
+        </head>
+        <body>
+          <h2>TeleDx Pro Graph Report</h2>
+          <p>${selectedVital ? vitalInfo[selectedVital].title : "Vital Graph"}</p>
+          <img src="${image}" />
+        </body>
+      </html>
+    `);
+
+    win.document.close();
+    win.focus();
+    setTimeout(() => {
+      win.print();
+    }, 500);
   }
 
   const alarm = useMemo(() => {
@@ -391,7 +448,7 @@ function App() {
       min: 1200,
       max: 3000,
       analysis:
-        latest?.ecgSamples?.length > 20
+        latest?.ecgSamples?.length > 10
           ? "Real ECG samples are being displayed from AD8232."
           : "ECG samples not received yet. Demo waveform fallback is shown.",
     },
@@ -792,7 +849,14 @@ function App() {
           <div className="modal analysis-modal">
             <div className="modal-header">
               <h2>{selected.title}</h2>
-              <button onClick={() => setShowAnalysisModal(false)}>Close</button>
+
+              <div className="modal-actions">
+                <button onClick={saveGraph}>Save Graph</button>
+                <button onClick={printGraph}>Print Graph</button>
+                <button onClick={() => setShowAnalysisModal(false)}>
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="analysis-summary">
@@ -827,6 +891,7 @@ function App() {
 
             <div className="analysis-chart">
               <Line
+                ref={chartRef}
                 data={chartData(
                   selected.label,
                   selected.values,

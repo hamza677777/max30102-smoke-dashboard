@@ -724,4 +724,92 @@ th {
   .analysis-chart {
     height: 260px;
   }
+}/* ECG FULL SCREEN MODAL */
+
+.ecg-modal {
+  max-width: 1200px;
+}
+
+.ecg-chart-large {
+  height: 500px;
+  background: rgba(2, 6, 23, 0.6);
+  border-radius: 16px;
+  padding: 15px;
+  margin-top: 15px;
+}
+
+.ecg-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 15px;
+  flex-wrap: wrap;
+}
+
+.ecg-actions button {
+  min-width: 140px;
+}
+
+.save-btn {
+  background: #16a34a;
+}
+
+.save-btn:hover {
+  background: #15803d;
+}
+
+.print-btn {
+  background: #2563eb;
+}
+
+.print-btn:hover {
+  background: #1d4ed8;
+}
+
+/* ECG CARD */
+
+.graph-card.ecg {
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.graph-card.ecg:hover {
+  transform: scale(1.01);
+  box-shadow: 0 0 25px rgba(56,189,248,.45);
+}
+
+/* CRITICAL BLINK */
+
+.critical-blink {
+  animation: criticalBlink 0.8s infinite;
+}
+
+@keyframes criticalBlink {
+  0%{
+    box-shadow:0 0 0px red;
+  }
+  50%{
+    box-shadow:0 0 30px red;
+  }
+  100%{
+    box-shadow:0 0 0px red;
+  }
+}
+
+/* PRINT */
+
+@media print {
+
+  .topbar,
+  .controls,
+  .footer,
+  .ecg-actions,
+  button {
+    display:none !important;
+  }
+
+  .ecg-chart-large {
+    height:700px;
+    border:none;
+  }
 }
