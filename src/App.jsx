@@ -22,8 +22,8 @@ const supabase = createClient(
 const USERNAME = "admin";
 const PASSWORD = "teledx2026";
 
-const MAX_POINTS = 35;
-const MAX_ECG_POINTS = 220;
+const MAX_POINTS = 40;
+const MAX_ECG_POINTS = 180;
 
 const emptyPatient = {
   fileName: "New Patient",
@@ -35,16 +35,32 @@ const emptyPatient = {
   notes: "",
 };
 
-function makeDemoECG(length = 120) {
+function zeros(n) {
+  return Array.from({ length: n }, () => 0);
+}
+
+function makeDemoECG(length = MAX_ECG_POINTS) {
   return Array.from({ length }, (_, i) => {
-    const x = i % 30;
-    if (x === 4) return 1980;
-    if (x === 5) return 2400;
-    if (x === 6) return 1650;
-    if (x === 7) return 2150;
-    if (x > 15 && x < 20) return 2070 + Math.sin(i / 2) * 25;
+    const x = i % 36;
+    if (x === 5) return 1980;
+    if (x === 6) return 2380;
+    if (x === 7) return 1680;
+    if (x === 8) return 2140;
+    if (x > 18 && x < 24) return 2070 + Math.sin(i / 2) * 25;
     return 2048 + Math.sin(i / 5) * 8;
   });
+}
+
+function cleanEcgSamples(samples) {
+  return samples
+    .map((v) => Number(v))
+    .filter((v) => !Number.isNaN(v))
+    .map((v) => {
+      if (v <= 50 || v >= 4090) return 2048;
+      if (v < 1200) return 1200;
+      if (v > 3000) return 3000;
+      return v;
+    });
 }
 
 function App() {
@@ -65,10 +81,9 @@ function App() {
   const [theme, setTheme] = useState("hospital");
   const [time, setTime] = useState(new Date());
 
-  const [labels, setLabels] = useState([]);
-  const [hrHistory, setHrHistory] = useState([]);
-  const [spo2History, setSpo2History] = useState([]);
-  const [tempHistory, setTempHistory] = useState([]);
+  const [hrHistory, setHrHistory] = useState(zeros(MAX_POINTS));
+  const [spo2History, setSpo2History] = useState(zeros(MAX_POINTS));
+  const [tempHistory, setTempHistory] = useState(zeros(MAX_POINTS));
   const [ecgHistory, setEcgHistory] = useState(makeDemoECG());
 
   const [showPatientModal, setShowPatientModal] = useState(false);
@@ -89,7 +104,6 @@ function App() {
 
   function handleLogin(e) {
     e.preventDefault();
-
     if (loginUser === USERNAME && loginPass === PASSWORD) {
       localStorage.setItem("teledx_login", "true");
       setLoggedIn(true);
@@ -102,21 +116,18 @@ function App() {
   function logout() {
     localStorage.removeItem("teledx_login");
     setLoggedIn(false);
-    setLoginUser("");
-    setLoginPass("");
   }
 
   function pushPoint(setter, value) {
-    setter((old) => {
-      const next = [...old, value];
-      return next.slice(-MAX_POINTS);
-    });
+    setter((old) => [...old.slice(1), Number(value || 0)]);
   }
 
   function pushEcgSamples(samples) {
+    const cleaned = cleanEcgSamples(samples);
+    if (!cleaned.length) return;
+
     setEcgHistory((old) => {
-      const cleanSamples = samples.map((v) => Number(v)).filter((v) => !Number.isNaN(v));
-      const next = [...old, ...cleanSamples];
+      const next = [...old, ...cleaned];
       return next.slice(-MAX_ECG_POINTS);
     });
   }
@@ -128,12 +139,10 @@ function App() {
       .order("id", { ascending: false })
       .limit(80);
 
-    if (error) {
+    if (error || !data || data.length === 0) {
       console.log(error);
       return;
     }
-
-    if (!data || data.length === 0) return;
 
     const row = data[0];
 
@@ -144,9 +153,7 @@ function App() {
       spo2: Number(row.spo2 ?? 0),
       temp: Number(row.body_temp ?? 0),
       ecg: Number(row.ecg_value ?? 2048),
-      ecgSamples: Array.isArray(row.ecg_samples)
-        ? row.ecg_samples.map((v) => Number(v))
-        : [],
+      ecgSamples: Array.isArray(row.ecg_samples) ? row.ecg_samples : [],
       fever: row.fever_status || "Normal",
       hrType: row.hr_status || "Normal",
       rhythm: row.rhythm_status || "Regular",
@@ -160,13 +167,6 @@ function App() {
     if (running && lastIdRef.current !== clean.id) {
       lastIdRef.current = clean.id;
 
-      const t = new Date(clean.created_at).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
-
-      setLabels((old) => [...old, t].slice(-MAX_POINTS));
       pushPoint(setHrHistory, clean.hr);
       pushPoint(setSpo2History, clean.spo2);
       pushPoint(setTempHistory, clean.temp);
@@ -211,12 +211,10 @@ function App() {
   }
 
   function savePatientFile() {
-    const fileName =
-      activePatient.fileName || activePatient.name || `Patient-${Date.now()}`;
-
+    const fileName = activePatient.fileName || activePatient.name || `Patient-${Date.now()}`;
     const fileToSave = { ...activePatient, fileName };
-    const exists = patientFiles.some((p) => p.fileName === fileName);
 
+    const exists = patientFiles.some((p) => p.fileName === fileName);
     const updated = exists
       ? patientFiles.map((p) => (p.fileName === fileName ? fileToSave : p))
       : [...patientFiles, fileToSave];
@@ -231,20 +229,14 @@ function App() {
     if (!name) return;
 
     const fileToSave = { ...activePatient, fileName: name };
-    savePatientFiles([
-      ...patientFiles.filter((p) => p.fileName !== name),
-      fileToSave,
-    ]);
+    savePatientFiles([...patientFiles.filter((p) => p.fileName !== name), fileToSave]);
     saveActivePatient(fileToSave);
     alert("Patient file saved as new file");
   }
 
   function deletePatientFile() {
     if (!confirm("Delete this patient file?")) return;
-
-    savePatientFiles(
-      patientFiles.filter((p) => p.fileName !== activePatient.fileName)
-    );
+    savePatientFiles(patientFiles.filter((p) => p.fileName !== activePatient.fileName));
     saveActivePatient(emptyPatient);
   }
 
@@ -275,7 +267,6 @@ function App() {
 
   function saveGraph() {
     if (!chartRef.current) return;
-
     const link = document.createElement("a");
     link.download = `${selectedVital || "vital"}_graph.png`;
     link.href = chartRef.current.toBase64Image();
@@ -284,7 +275,6 @@ function App() {
 
   function printGraph() {
     if (!chartRef.current) return;
-
     const image = chartRef.current.toBase64Image();
     const win = window.open("", "_blank");
 
@@ -311,66 +301,29 @@ function App() {
   }
 
   const alarm = useMemo(() => {
-    if (!latest) {
-      return {
-        level: "waiting",
-        type: "none",
-        title: "Waiting for Data",
-        msg: "No live reading received yet.",
-      };
-    }
+    if (!latest) return { level: "waiting", type: "none", title: "Waiting for Data", msg: "No live reading received yet." };
 
     if (latest.hrType === "No Finger" || latest.health === "No Finger") {
-      return {
-        level: "sensor",
-        type: "hr",
-        title: "Sensor Alert",
-        msg: "Place finger on MAX30102 sensor.",
-      };
+      return { level: "sensor", type: "hr", title: "Sensor Alert", msg: "Place finger on MAX30102 sensor." };
     }
 
     if (latest.spo2 > 0 && latest.spo2 < 90) {
-      return {
-        level: "critical",
-        type: "spo2",
-        title: "Critical SpO₂ Alarm",
-        msg: "Oxygen saturation is critically low.",
-      };
+      return { level: "critical", type: "spo2", title: "Critical SpO₂ Alarm", msg: "Oxygen saturation is critically low." };
     }
 
     if (latest.temp < 35 || latest.temp > 38) {
-      return {
-        level: "warning",
-        type: "temp",
-        title: "Temperature Alarm",
-        msg: "Temperature is outside 35–38 °C range.",
-      };
+      return { level: "warning", type: "temp", title: "Temperature Alarm", msg: "Temperature is outside 35–38 °C range." };
     }
 
     if (latest.hr > 100 || (latest.hr > 0 && latest.hr < 60)) {
-      return {
-        level: "warning",
-        type: "hr",
-        title: "Heart Rate Alarm",
-        msg: "Heart rate is abnormal.",
-      };
+      return { level: "warning", type: "hr", title: "Heart Rate Alarm", msg: "Heart rate is abnormal." };
     }
 
     if (latest.rhythm === "Irregular") {
-      return {
-        level: "warning",
-        type: "ecg",
-        title: "Rhythm Alarm",
-        msg: "Irregular rhythm detected.",
-      };
+      return { level: "warning", type: "ecg", title: "Rhythm Alarm", msg: "Irregular rhythm detected." };
     }
 
-    return {
-      level: "normal",
-      type: "none",
-      title: "Normal",
-      msg: "All received vitals are stable.",
-    };
+    return { level: "normal", type: "none", title: "Normal", msg: "All received vitals are stable." };
   }, [latest]);
 
   const vitalInfo = {
@@ -382,8 +335,8 @@ function App() {
       status: latest?.hrType || "Waiting",
       values: hrHistory,
       color: "#ef4444",
-      min: 40,
-      max: 150,
+      min: 0,
+      max: 160,
       analysis:
         latest?.hr === 0
           ? "No finger detected."
@@ -409,7 +362,7 @@ function App() {
         : "Normal",
       values: spo2History,
       color: "#22c55e",
-      min: 85,
+      min: 0,
       max: 100,
       analysis:
         latest?.spo2 === 0
@@ -428,8 +381,8 @@ function App() {
       status: latest?.temp < 35 || latest?.temp > 38 ? "Warning" : "Normal",
       values: tempHistory,
       color: "#f59e0b",
-      min: 35,
-      max: 38,
+      min: 0,
+      max: 45,
       analysis:
         latest?.temp < 35 || latest?.temp > 38
           ? "Temperature is outside 35–38 °C range."
@@ -443,8 +396,8 @@ function App() {
       status: latest?.rhythm || "Regular",
       values: ecgHistory,
       color: "#38bdf8",
-      min: 1200,
-      max: 3000,
+      min: 0,
+      max: 4095,
       analysis:
         latest?.ecgSamples?.length > 5
           ? "Real ECG samples are displayed from AD8232."
@@ -458,21 +411,16 @@ function App() {
   }
 
   function chartData(title, values, color, fill = true) {
-    const useLabels =
-      title === "ECG Signal"
-        ? values.map((_, i) => i + 1)
-        : values.map((_, i) => labels[i] || i + 1);
-
     return {
-      labels: useLabels,
+      labels: values.map((_, i) => i),
       datasets: [
         {
           label: title,
           data: values,
           borderColor: color,
-          backgroundColor: fill ? color + "20" : "transparent",
+          backgroundColor: fill ? color + "22" : "transparent",
           fill,
-          tension: title === "ECG Signal" ? 0.05 : 0.35,
+          tension: title === "ECG Signal" ? 0.08 : 0.42,
           borderWidth: title === "ECG Signal" ? 2 : 3,
           pointRadius: 0,
           pointHoverRadius: 4,
@@ -504,16 +452,14 @@ function App() {
           min,
           max,
           ticks: { color: "#93a4b8", font: { size: 10 } },
-          grid: { color: "rgba(148,163,184,0.12)" },
+          grid: { color: "rgba(148,163,184,0.15)" },
         },
       },
     };
   }
 
   function downloadCSV() {
-    let csv =
-      "ID,Device ID,Patient,HR,SpO2,Temp,ECG,Fever,HR Status,Rhythm,Health,Time\n";
-
+    let csv = "ID,Device ID,Patient,HR,SpO2,Temp,ECG,Fever,HR Status,Rhythm,Health,Time\n";
     records.forEach((r) => {
       csv += `${r.id},${r.device_id},${activePatient.name},${r.heart_rate},${r.spo2},${r.body_temp},${r.ecg_value},${r.fever_status},${r.hr_status},${r.rhythm_status},${r.health_status},${r.created_at}\n`;
     });
@@ -521,7 +467,6 @@ function App() {
     const blob = new Blob([csv], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
-
     a.href = url;
     a.download = "teledx_vitals_data.csv";
     a.click();
@@ -535,23 +480,9 @@ function App() {
         <form className="login-card" onSubmit={handleLogin}>
           <h1>TeleDx Pro</h1>
           <p>Secure Dashboard Access</p>
-
-          <input
-            type="text"
-            placeholder="Username"
-            value={loginUser}
-            onChange={(e) => setLoginUser(e.target.value)}
-          />
-
-          <input
-            type="password"
-            placeholder="Password"
-            value={loginPass}
-            onChange={(e) => setLoginPass(e.target.value)}
-          />
-
+          <input type="text" placeholder="Username" value={loginUser} onChange={(e) => setLoginUser(e.target.value)} />
+          <input type="password" placeholder="Password" value={loginPass} onChange={(e) => setLoginPass(e.target.value)} />
           {loginError && <span className="login-error">{loginError}</span>}
-
           <button type="submit">Login</button>
         </form>
       </div>
@@ -574,11 +505,8 @@ function App() {
               <option value="purple">Purple</option>
               <option value="green">Green</option>
             </select>
-
             <span className="clock">{time.toLocaleTimeString()}</span>
-            <span className={running ? "badge live" : "badge pause"}>
-              {running ? "LIVE" : "PAUSED"}
-            </span>
+            <span className={running ? "badge live" : "badge pause"}>{running ? "LIVE" : "PAUSED"}</span>
             <button onClick={logout}>Logout</button>
           </div>
         </div>
@@ -589,9 +517,7 @@ function App() {
             <b>{alarmMuted ? "Alarm Muted" : alarm.title}</b>
             <p>{alarm.msg}</p>
           </div>
-          <button onClick={() => setAlarmMuted(!alarmMuted)}>
-            {alarmMuted ? "Unmute" : "Mute Alarm"}
-          </button>
+          <button onClick={() => setAlarmMuted(!alarmMuted)}>{alarmMuted ? "Unmute" : "Mute Alarm"}</button>
         </div>
 
         <div className="system-panel">
@@ -600,103 +526,44 @@ function App() {
             <b>{activePatient.name || "Click to Add"}</b>
             <small>{activePatient.patientId || "No ID"}</small>
           </div>
-
-          <div>
-            <span>Device ID</span>
-            <b>{latest?.device_id || "TDX-001"}</b>
-          </div>
-
-          <div>
-            <span>Connection</span>
-            <b>AWS Cloud Connected</b>
-          </div>
-
-          <div>
-            <span>Overall Status</span>
-            <b className={`status-${statusClass(latest?.health || "Waiting")}`}>
-              {latest?.health || "Waiting"}
-            </b>
-          </div>
+          <div><span>Device ID</span><b>{latest?.device_id || "TDX-001"}</b></div>
+          <div><span>Connection</span><b>AWS Cloud Connected</b></div>
+          <div><span>Overall Status</span><b className={`status-${statusClass(latest?.health || "Waiting")}`}>{latest?.health || "Waiting"}</b></div>
         </div>
 
         <div className="vital-cards">
           {Object.entries(vitalInfo).map(([key, item]) => (
-            <div
-              key={key}
-              className={`vital-card ${key} clickable ${
-                alarm.type === key && !alarmMuted ? "blink-card" : ""
-              }`}
-              onClick={() => openAnalysis(key)}
-            >
-              <span>
-                {key === "hr"
-                  ? "❤️ Heart Rate"
-                  : key === "spo2"
-                  ? "🫁 SpO₂"
-                  : key === "temp"
-                  ? "🌡 Temperature"
-                  : "🫀 ECG Signal"}
-              </span>
+            <div key={key} className={`vital-card ${key} clickable ${alarm.type === key && !alarmMuted ? "blink-card" : ""}`} onClick={() => openAnalysis(key)}>
+              <span>{key === "hr" ? "❤️ Heart Rate" : key === "spo2" ? "🫁 SpO₂" : key === "temp" ? "🌡 Temperature" : "🫀 ECG Signal"}</span>
               <h2>{item.value}</h2>
               <p>{item.unit}</p>
-              <small className={`status-${statusClass(item.status)}`}>
-                {item.status}
-              </small>
+              <small className={`status-${statusClass(item.status)}`}>{item.status}</small>
             </div>
           ))}
         </div>
 
         <div className="mini-status">
-          <div>
-            <span>Fever</span>
-            <b className={`status-${statusClass(latest?.fever)}`}>
-              {latest?.fever || "--"}
-            </b>
-          </div>
-          <div>
-            <span>HR Type</span>
-            <b className={`status-${statusClass(latest?.hrType)}`}>
-              {latest?.hrType || "--"}
-            </b>
-          </div>
-          <div>
-            <span>Rhythm</span>
-            <b className={`status-${statusClass(latest?.rhythm)}`}>
-              {latest?.rhythm || "--"}
-            </b>
-          </div>
-          <div>
-            <span>Health</span>
-            <b className={`status-${statusClass(latest?.health)}`}>
-              {latest?.health || "--"}
-            </b>
-          </div>
+          <div><span>Fever</span><b className={`status-${statusClass(latest?.fever)}`}>{latest?.fever || "--"}</b></div>
+          <div><span>HR Type</span><b className={`status-${statusClass(latest?.hrType)}`}>{latest?.hrType || "--"}</b></div>
+          <div><span>Rhythm</span><b className={`status-${statusClass(latest?.rhythm)}`}>{latest?.rhythm || "--"}</b></div>
+          <div><span>Health</span><b className={`status-${statusClass(latest?.health)}`}>{latest?.health || "--"}</b></div>
         </div>
 
         <div className="graph-panel">
           <div className="graph-header">
             <h3>Live Monitoring Graphs</h3>
-            <p>Graphs move forward from left to right. Click any graph for analysis.</p>
+            <p>Calibrated graphs starting from zero baseline. Click any graph for analysis.</p>
           </div>
 
           <div className="graphs-grid">
             {Object.entries(vitalInfo).map(([key, item]) => (
-              <div
-                className={`graph-card ${key}`}
-                key={key}
-                onClick={() => openAnalysis(key)}
-              >
+              <div className={`graph-card ${key}`} key={key} onClick={() => openAnalysis(key)}>
                 <div className="graph-title">
                   <span>{item.label}</span>
-                  <b>
-                    {item.value} {item.unit}
-                  </b>
+                  <b>{item.value} {item.unit}</b>
                 </div>
                 <div className="chart-box">
-                  <Line
-                    data={chartData(item.label, item.values, item.color, key !== "ecg")}
-                    options={chartOptions(item.min, item.max, item.unit)}
-                  />
+                  <Line data={chartData(item.label, item.values, item.color, key !== "ecg")} options={chartOptions(item.min, item.max, item.unit)} />
                 </div>
               </div>
             ))}
@@ -705,12 +572,8 @@ function App() {
 
         <div className="controls">
           <button onClick={fetchData}>Refresh</button>
-          <button onClick={() => setRunning(!running)}>
-            {running ? "Stop Monitoring" : "Start Monitoring"}
-          </button>
-          <button onClick={() => setShowTable(!showTable)}>
-            {showTable ? "Hide Table" : "Show Table"}
-          </button>
+          <button onClick={() => setRunning(!running)}>{running ? "Stop Monitoring" : "Start Monitoring"}</button>
+          <button onClick={() => setShowTable(!showTable)}>{showTable ? "Hide Table" : "Show Table"}</button>
           <button onClick={downloadCSV}>Export CSV</button>
         </div>
 
@@ -720,33 +583,13 @@ function App() {
             <table>
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Device</th>
-                  <th>HR</th>
-                  <th>SpO₂</th>
-                  <th>Temp</th>
-                  <th>ECG</th>
-                  <th>Fever</th>
-                  <th>HR Type</th>
-                  <th>Rhythm</th>
-                  <th>Health</th>
-                  <th>Time</th>
+                  <th>ID</th><th>Device</th><th>HR</th><th>SpO₂</th><th>Temp</th><th>ECG</th><th>Fever</th><th>HR Type</th><th>Rhythm</th><th>Health</th><th>Time</th>
                 </tr>
               </thead>
               <tbody>
                 {records.map((row) => (
                   <tr key={row.id}>
-                    <td>{row.id}</td>
-                    <td>{row.device_id}</td>
-                    <td>{row.heart_rate}</td>
-                    <td>{row.spo2}</td>
-                    <td>{row.body_temp}</td>
-                    <td>{row.ecg_value}</td>
-                    <td>{row.fever_status}</td>
-                    <td>{row.hr_status}</td>
-                    <td>{row.rhythm_status}</td>
-                    <td>{row.health_status}</td>
-                    <td>{new Date(row.created_at).toLocaleTimeString()}</td>
+                    <td>{row.id}</td><td>{row.device_id}</td><td>{row.heart_rate}</td><td>{row.spo2}</td><td>{row.body_temp}</td><td>{row.ecg_value}</td><td>{row.fever_status}</td><td>{row.hr_status}</td><td>{row.rhythm_status}</td><td>{row.health_status}</td><td>{new Date(row.created_at).toLocaleTimeString()}</td>
                   </tr>
                 ))}
               </tbody>
@@ -756,12 +599,7 @@ function App() {
 
         <div className="footer">
           <span>Database: Supabase Vitals Connected</span>
-          <span>
-            Last Update:{" "}
-            {latest?.created_at
-              ? new Date(latest.created_at).toLocaleString()
-              : "Waiting"}
-          </span>
+          <span>Last Update: {latest?.created_at ? new Date(latest.created_at).toLocaleString() : "Waiting"}</span>
         </div>
       </div>
 
@@ -777,66 +615,30 @@ function App() {
               <button onClick={newPatientFile}>New File</button>
               <button onClick={savePatientFile}>Save</button>
               <button onClick={saveAsPatientFile}>Save As</button>
-              <button className="danger" onClick={deletePatientFile}>
-                Delete
-              </button>
+              <button className="danger" onClick={deletePatientFile}>Delete</button>
             </div>
 
             <div className="patient-select">
-              <select
-                onChange={(e) => loadPatientFile(e.target.value)}
-                value={activePatient.fileName}
-              >
+              <select onChange={(e) => loadPatientFile(e.target.value)} value={activePatient.fileName}>
                 <option value="">Select Saved Patient</option>
                 {patientFiles.map((p) => (
-                  <option key={p.fileName} value={p.fileName}>
-                    {p.fileName} - {p.name}
-                  </option>
+                  <option key={p.fileName} value={p.fileName}>{p.fileName} - {p.name}</option>
                 ))}
               </select>
             </div>
 
             <div className="patient-form-modal">
-              <input
-                placeholder="File Name"
-                value={activePatient.fileName}
-                onChange={(e) => updatePatient("fileName", e.target.value)}
-              />
-              <input
-                placeholder="Patient Name"
-                value={activePatient.name}
-                onChange={(e) => updatePatient("name", e.target.value)}
-              />
-              <input
-                placeholder="Patient ID"
-                value={activePatient.patientId}
-                onChange={(e) => updatePatient("patientId", e.target.value)}
-              />
-              <input
-                placeholder="Age"
-                value={activePatient.age}
-                onChange={(e) => updatePatient("age", e.target.value)}
-              />
-
-              <select
-                value={activePatient.gender}
-                onChange={(e) => updatePatient("gender", e.target.value)}
-              >
+              <input placeholder="File Name" value={activePatient.fileName} onChange={(e) => updatePatient("fileName", e.target.value)} />
+              <input placeholder="Patient Name" value={activePatient.name} onChange={(e) => updatePatient("name", e.target.value)} />
+              <input placeholder="Patient ID" value={activePatient.patientId} onChange={(e) => updatePatient("patientId", e.target.value)} />
+              <input placeholder="Age" value={activePatient.age} onChange={(e) => updatePatient("age", e.target.value)} />
+              <select value={activePatient.gender} onChange={(e) => updatePatient("gender", e.target.value)}>
                 <option value="">Gender</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
               </select>
-
-              <input
-                placeholder="Condition"
-                value={activePatient.condition}
-                onChange={(e) => updatePatient("condition", e.target.value)}
-              />
-              <textarea
-                placeholder="Notes"
-                value={activePatient.notes}
-                onChange={(e) => updatePatient("notes", e.target.value)}
-              />
+              <input placeholder="Condition" value={activePatient.condition} onChange={(e) => updatePatient("condition", e.target.value)} />
+              <textarea placeholder="Notes" value={activePatient.notes} onChange={(e) => updatePatient("notes", e.target.value)} />
             </div>
           </div>
         </div>
@@ -850,59 +652,23 @@ function App() {
               <div className="modal-actions">
                 <button onClick={saveGraph}>Save Graph</button>
                 <button onClick={printGraph}>Print Graph</button>
-                <button onClick={() => setShowAnalysisModal(false)}>
-                  Close
-                </button>
+                <button onClick={() => setShowAnalysisModal(false)}>Close</button>
               </div>
             </div>
 
             <div className="analysis-summary">
-              <div>
-                <span>Latest</span>
-                <b>
-                  {selected.value} {selected.unit}
-                </b>
-              </div>
-              <div>
-                <span>Average</span>
-                <b>
-                  {avg(selected.values)} {selected.unit}
-                </b>
-              </div>
-              <div>
-                <span>Minimum</span>
-                <b>
-                  {minVal(selected.values)} {selected.unit}
-                </b>
-              </div>
-              <div>
-                <span>Maximum</span>
-                <b>
-                  {maxVal(selected.values)} {selected.unit}
-                </b>
-              </div>
+              <div><span>Latest</span><b>{selected.value} {selected.unit}</b></div>
+              <div><span>Average</span><b>{avg(selected.values)} {selected.unit}</b></div>
+              <div><span>Minimum</span><b>{minVal(selected.values)} {selected.unit}</b></div>
+              <div><span>Maximum</span><b>{maxVal(selected.values)} {selected.unit}</b></div>
             </div>
 
             <div className="analysis-chart">
-              <Line
-                ref={chartRef}
-                data={chartData(
-                  selected.label,
-                  selected.values,
-                  selected.color,
-                  selectedVital !== "ecg"
-                )}
-                options={chartOptions(selected.min, selected.max, selected.unit)}
-              />
+              <Line ref={chartRef} data={chartData(selected.label, selected.values, selected.color, selectedVital !== "ecg")} options={chartOptions(selected.min, selected.max, selected.unit)} />
             </div>
 
             <div className="analysis-text">
-              <h3>
-                Status:{" "}
-                <span className={`status-${statusClass(selected.status)}`}>
-                  {selected.status}
-                </span>
-              </h3>
+              <h3>Status: <span className={`status-${statusClass(selected.status)}`}>{selected.status}</span></h3>
               <p>{selected.analysis}</p>
             </div>
           </div>
