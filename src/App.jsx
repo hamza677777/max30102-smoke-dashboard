@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import {
   Chart as ChartJS,
@@ -19,40 +19,78 @@ const supabase = createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFuZnZieWNyaXpxaHF3YXFnbmtzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NTc3NDksImV4cCI6MjA5NzAzMzc0OX0.3W13dxVxBC9p9We1Id5d0sWSryWxpdYrk175FKIS5bE"
 );
 
+const USERNAME = "admin";
+const PASSWORD = "teledx2026";
+
+const emptyPatient = {
+  fileName: "New Patient",
+  name: "",
+  patientId: "",
+  age: "",
+  gender: "",
+  condition: "",
+  notes: "",
+};
+
 function App() {
+  const [loggedIn, setLoggedIn] = useState(() => localStorage.getItem("teledx_login") === "true");
+  const [loginUser, setLoginUser] = useState("");
+  const [loginPass, setLoginPass] = useState("");
+  const [loginError, setLoginError] = useState("");
+
   const [latest, setLatest] = useState(null);
   const [records, setRecords] = useState([]);
   const [running, setRunning] = useState(true);
-  const [showTable, setShowTable] = useState(false);
   const [theme, setTheme] = useState("hospital");
   const [time, setTime] = useState(new Date());
-  const [alarmMuted, setAlarmMuted] = useState(false);
 
-  const [patient, setPatient] = useState(() => {
-    const saved = localStorage.getItem("patient_details");
-    return saved
-      ? JSON.parse(saved)
-      : {
-          name: "",
-          age: "",
-          gender: "",
-          patientId: "P-001",
-          condition: "",
-        };
-  });
-
+  const [labels, setLabels] = useState([]);
   const [hrHistory, setHrHistory] = useState([]);
   const [spo2History, setSpo2History] = useState([]);
   const [tempHistory, setTempHistory] = useState([]);
   const [ecgHistory, setEcgHistory] = useState([]);
-  const [labels, setLabels] = useState([]);
+
+  const [showPatientModal, setShowPatientModal] = useState(false);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [selectedVital, setSelectedVital] = useState(null);
+  const [showTable, setShowTable] = useState(false);
+  const [alarmMuted, setAlarmMuted] = useState(false);
+
+  const [patientFiles, setPatientFiles] = useState(() => {
+    const saved = localStorage.getItem("patient_files");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [activePatient, setActivePatient] = useState(() => {
+    const saved = localStorage.getItem("active_patient");
+    return saved ? JSON.parse(saved) : emptyPatient;
+  });
+
+  function handleLogin(e) {
+    e.preventDefault();
+
+    if (loginUser === USERNAME && loginPass === PASSWORD) {
+      localStorage.setItem("teledx_login", "true");
+      setLoggedIn(true);
+      setLoginError("");
+    } else {
+      setLoginError("Invalid username or password");
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem("teledx_login");
+    setLoggedIn(false);
+    setLoginUser("");
+    setLoginPass("");
+  }
 
   async function fetchData() {
     const { data, error } = await supabase
       .from("vitals")
       .select("*")
       .order("id", { ascending: false })
-      .limit(60);
+      .limit(80);
 
     if (error) {
       console.log(error);
@@ -60,20 +98,20 @@ function App() {
     }
 
     if (data && data.length > 0) {
-      const latestRow = data[0];
+      const row = data[0];
 
       const clean = {
-        id: latestRow.id,
-        device_id: latestRow.device_id || "TDX-001",
-        hr: Number(latestRow.heart_rate ?? 0),
-        spo2: Number(latestRow.spo2 ?? 0),
-        temp: Number(latestRow.body_temp ?? 0),
-        ecg: Number(latestRow.ecg_value ?? 0),
-        fever: latestRow.fever_status || "Normal",
-        hrType: latestRow.hr_status || "Normal",
-        rhythm: latestRow.rhythm_status || "Checking",
-        health: latestRow.health_status || "Normal",
-        created_at: latestRow.created_at,
+        id: row.id,
+        device_id: row.device_id || "TDX-001",
+        hr: Number(row.heart_rate ?? 0),
+        spo2: Number(row.spo2 ?? 0),
+        temp: Number(row.body_temp ?? 0),
+        ecg: Number(row.ecg_value ?? 0),
+        fever: row.fever_status || "Normal",
+        hrType: row.hr_status || "Normal",
+        rhythm: row.rhythm_status || "Checking",
+        health: row.health_status || "Normal",
+        created_at: row.created_at,
       };
 
       setLatest(clean);
@@ -101,6 +139,8 @@ function App() {
   }
 
   useEffect(() => {
+    if (!loggedIn) return;
+
     fetchData();
     const dataTimer = setInterval(fetchData, 1500);
     const clockTimer = setInterval(() => setTime(new Date()), 1000);
@@ -109,35 +149,94 @@ function App() {
       clearInterval(dataTimer);
       clearInterval(clockTimer);
     };
-  }, [running]);
+  }, [running, loggedIn]);
+
+  function savePatientFiles(files) {
+    setPatientFiles(files);
+    localStorage.setItem("patient_files", JSON.stringify(files));
+  }
+
+  function saveActivePatient(patient) {
+    setActivePatient(patient);
+    localStorage.setItem("active_patient", JSON.stringify(patient));
+  }
 
   function updatePatient(field, value) {
-    const updated = { ...patient, [field]: value };
-    setPatient(updated);
-    localStorage.setItem("patient_details", JSON.stringify(updated));
+    saveActivePatient({ ...activePatient, [field]: value });
+  }
+
+  function newPatientFile() {
+    saveActivePatient({ ...emptyPatient, fileName: `Patient-${Date.now()}` });
+  }
+
+  function savePatientFile() {
+    const fileName = activePatient.fileName || activePatient.name || `Patient-${Date.now()}`;
+    const fileToSave = { ...activePatient, fileName };
+
+    const exists = patientFiles.some((p) => p.fileName === fileName);
+    const updated = exists
+      ? patientFiles.map((p) => (p.fileName === fileName ? fileToSave : p))
+      : [...patientFiles, fileToSave];
+
+    savePatientFiles(updated);
+    saveActivePatient(fileToSave);
+    alert("Patient file saved");
+  }
+
+  function saveAsPatientFile() {
+    const name = prompt("Enter new file name:");
+    if (!name) return;
+
+    const fileToSave = { ...activePatient, fileName: name };
+    const updated = [...patientFiles.filter((p) => p.fileName !== name), fileToSave];
+
+    savePatientFiles(updated);
+    saveActivePatient(fileToSave);
+    alert("Patient file saved as new file");
+  }
+
+  function deletePatientFile() {
+    if (!activePatient.fileName) return;
+    const ok = confirm("Delete this patient file?");
+    if (!ok) return;
+
+    const updated = patientFiles.filter((p) => p.fileName !== activePatient.fileName);
+    savePatientFiles(updated);
+    saveActivePatient(emptyPatient);
+  }
+
+  function loadPatientFile(fileName) {
+    const file = patientFiles.find((p) => p.fileName === fileName);
+    if (file) saveActivePatient(file);
   }
 
   function statusClass(value) {
-    return String(value || "waiting")
-      .toLowerCase()
-      .replaceAll(" ", "-");
+    return String(value || "waiting").toLowerCase().replaceAll(" ", "-");
   }
 
-  function getAlarm() {
+  function avg(arr) {
+    const valid = arr.filter((v) => Number(v) > 0);
+    if (!valid.length) return 0;
+    return Math.round(valid.reduce((a, b) => a + b, 0) / valid.length);
+  }
+
+  function minVal(arr) {
+    const valid = arr.filter((v) => Number(v) > 0);
+    return valid.length ? Math.min(...valid) : 0;
+  }
+
+  function maxVal(arr) {
+    const valid = arr.filter((v) => Number(v) > 0);
+    return valid.length ? Math.max(...valid) : 0;
+  }
+
+  const alarm = useMemo(() => {
     if (!latest) {
-      return {
-        level: "waiting",
-        title: "Waiting for Data",
-        msg: "No live reading received yet.",
-      };
+      return { level: "waiting", title: "Waiting for Data", msg: "No live reading received yet." };
     }
 
-    if (latest.health === "No Finger" || latest.hrType === "No Finger") {
-      return {
-        level: "sensor",
-        title: "Sensor Alert",
-        msg: "Place finger on MAX30102 sensor for HR and SpO₂ readings.",
-      };
+    if (latest.hrType === "No Finger" || latest.health === "No Finger") {
+      return { level: "sensor", title: "Sensor Alert", msg: "Place finger on MAX30102 sensor for HR and SpO₂ readings." };
     }
 
     if (
@@ -147,11 +246,7 @@ function App() {
       latest.hr > 130 ||
       (latest.hr > 0 && latest.hr < 45)
     ) {
-      return {
-        level: "critical",
-        title: "Critical Alarm",
-        msg: "Patient vitals are outside safe range. Immediate attention required.",
-      };
+      return { level: "critical", title: "Critical Alarm", msg: "Vitals are outside safe range. Immediate attention required." };
     }
 
     if (
@@ -162,29 +257,92 @@ function App() {
       latest.rhythm === "Irregular" ||
       latest.spo2 < 95
     ) {
-      return {
-        level: "warning",
-        title: "Warning Alarm",
-        msg: "Vitals need observation. Check sensor placement and patient condition.",
-      };
+      return { level: "warning", title: "Warning Alarm", msg: "Vitals need observation. Check sensor placement and patient condition." };
     }
 
-    return {
-      level: "normal",
-      title: "Normal",
-      msg: "All received vitals are within acceptable monitoring range.",
-    };
+    return { level: "normal", title: "Normal", msg: "All received vitals are stable." };
+  }, [latest]);
+
+  const vitalInfo = {
+    hr: {
+      title: "Heart Rate Analysis",
+      label: "Heart Rate",
+      unit: "BPM",
+      value: latest?.hr ?? "--",
+      status: latest?.hrType || "Waiting",
+      values: hrHistory,
+      color: "#ef4444",
+      min: 40,
+      max: 150,
+      analysis:
+        latest?.hr === 0
+          ? "No finger detected. Place finger properly on MAX30102."
+          : latest?.hr > 100
+          ? "Tachycardia condition detected. Heart rate is above normal monitoring range."
+          : latest?.hr < 60
+          ? "Bradycardia condition detected. Heart rate is below normal monitoring range."
+          : "Heart rate is currently stable.",
+    },
+    spo2: {
+      title: "SpO₂ Analysis",
+      label: "Oxygen Saturation",
+      unit: "%",
+      value: latest?.spo2 ?? "--",
+      status:
+        !latest ? "Waiting" : latest.spo2 === 0 ? "No Finger" : latest.spo2 < 90 ? "Critical" : latest.spo2 < 95 ? "Warning" : "Normal",
+      values: spo2History,
+      color: "#22c55e",
+      min: 85,
+      max: 100,
+      analysis:
+        latest?.spo2 === 0
+          ? "No SpO₂ reading. Place finger correctly on MAX30102."
+          : latest?.spo2 < 90
+          ? "Critical low oxygen saturation detected."
+          : latest?.spo2 < 95
+          ? "SpO₂ is slightly low. Observation is required."
+          : "SpO₂ level is stable.",
+    },
+    temp: {
+      title: "Temperature Analysis",
+      label: "Body Temperature",
+      unit: "°C",
+      value: latest?.temp ?? "--",
+      status: latest?.fever || "Waiting",
+      values: tempHistory,
+      color: "#f59e0b",
+      min: 34,
+      max: 40,
+      analysis:
+        latest?.temp >= 38
+          ? "Fever alert detected. Body temperature is high."
+          : "Body temperature is currently stable.",
+    },
+    ecg: {
+      title: "ECG Wave Analysis",
+      label: "ECG Signal",
+      unit: "ADC",
+      value: latest?.ecg ?? "--",
+      status: latest?.rhythm || "Waiting",
+      values: ecgHistory,
+      color: "#38bdf8",
+      min: 1500,
+      max: 2600,
+      analysis:
+        latest?.rhythm === "Irregular"
+          ? "Irregular rhythm detected according to HR variation."
+          : latest?.ecg === 2048
+          ? "ECG is near baseline. Check AD8232 electrodes for proper waveform."
+          : "ECG signal is being received.",
+    },
+  };
+
+  function openAnalysis(type) {
+    setSelectedVital(type);
+    setShowAnalysisModal(true);
   }
 
-  const alarm = getAlarm();
-
-  const hrStatus = latest?.hrType || "Waiting";
-  const spo2Status =
-    !latest ? "Waiting" : latest.spo2 === 0 ? "No Finger" : latest.spo2 < 90 ? "Critical" : latest.spo2 < 95 ? "Warning" : "Normal";
-  const tempStatus = !latest ? "Waiting" : latest.temp >= 38 ? "Warning" : "Normal";
-  const overallStatus = latest?.health || "Waiting";
-
-  function chartData(title, values, color, fill = false) {
+  function chartData(title, values, color, fill = true) {
     return {
       labels,
       datasets: [
@@ -194,8 +352,8 @@ function App() {
           borderColor: color,
           backgroundColor: fill ? color + "25" : "transparent",
           fill,
-          tension: title === "ECG" ? 0.18 : 0.38,
-          borderWidth: title === "ECG" ? 2 : 3,
+          tension: title === "ECG Signal" ? 0.18 : 0.38,
+          borderWidth: title === "ECG Signal" ? 2 : 3,
           pointRadius: 0,
           pointHoverRadius: 4,
         },
@@ -217,20 +375,12 @@ function App() {
         },
       },
       scales: {
-        x: {
-          display: false,
-          grid: { display: false },
-        },
+        x: { display: false, grid: { display: false } },
         y: {
           min,
           max,
-          ticks: {
-            color: "#93a4b8",
-            font: { size: 10 },
-          },
-          grid: {
-            color: "rgba(148,163,184,0.12)",
-          },
+          ticks: { color: "#93a4b8", font: { size: 10 } },
+          grid: { color: "rgba(148,163,184,0.12)" },
         },
       },
     };
@@ -240,7 +390,7 @@ function App() {
     let csv = "ID,Device ID,Patient,HR,SpO2,Temp,ECG,Fever,HR Status,Rhythm,Health,Time\n";
 
     records.forEach((r) => {
-      csv += `${r.id},${r.device_id},${patient.name},${r.heart_rate},${r.spo2},${r.body_temp},${r.ecg_value},${r.fever_status},${r.hr_status},${r.rhythm_status},${r.health_status},${r.created_at}\n`;
+      csv += `${r.id},${r.device_id},${activePatient.name},${r.heart_rate},${r.spo2},${r.body_temp},${r.ecg_value},${r.fever_status},${r.hr_status},${r.rhythm_status},${r.health_status},${r.created_at}\n`;
     });
 
     const blob = new Blob([csv], { type: "text/csv" });
@@ -250,6 +400,37 @@ function App() {
     a.href = url;
     a.download = "teledx_vitals_data.csv";
     a.click();
+  }
+
+  const selected = selectedVital ? vitalInfo[selectedVital] : null;
+
+  if (!loggedIn) {
+    return (
+      <div className="login-page">
+        <form className="login-card" onSubmit={handleLogin}>
+          <h1>TeleDx Pro</h1>
+          <p>Secure Dashboard Access</p>
+
+          <input
+            type="text"
+            placeholder="Username"
+            value={loginUser}
+            onChange={(e) => setLoginUser(e.target.value)}
+          />
+
+          <input
+            type="password"
+            placeholder="Password"
+            value={loginPass}
+            onChange={(e) => setLoginPass(e.target.value)}
+          />
+
+          {loginError && <span className="login-error">{loginError}</span>}
+
+          <button type="submit">Login</button>
+        </form>
+      </div>
+    );
   }
 
   return (
@@ -274,6 +455,8 @@ function App() {
             <span className={running ? "badge live" : "badge pause"}>
               {running ? "LIVE" : "PAUSED"}
             </span>
+
+            <button onClick={logout}>Logout</button>
           </div>
         </div>
 
@@ -285,58 +468,20 @@ function App() {
           </div>
 
           <button onClick={() => setAlarmMuted(!alarmMuted)}>
-            {alarmMuted ? "Unmute Alarm" : "Mute Alarm"}
+            {alarmMuted ? "Unmute" : "Mute Alarm"}
           </button>
         </div>
 
-        <div className="patient-panel">
-          <div className="patient-title">
-            <h3>Patient Details</h3>
-            <p>Manual entry for current monitoring session</p>
-          </div>
-
-          <div className="patient-form">
-            <input
-              placeholder="Patient Name"
-              value={patient.name}
-              onChange={(e) => updatePatient("name", e.target.value)}
-            />
-
-            <input
-              placeholder="Patient ID"
-              value={patient.patientId}
-              onChange={(e) => updatePatient("patientId", e.target.value)}
-            />
-
-            <input
-              placeholder="Age"
-              value={patient.age}
-              onChange={(e) => updatePatient("age", e.target.value)}
-            />
-
-            <select value={patient.gender} onChange={(e) => updatePatient("gender", e.target.value)}>
-              <option value="">Gender</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
-
-            <input
-              placeholder="Condition / Notes"
-              value={patient.condition}
-              onChange={(e) => updatePatient("condition", e.target.value)}
-            />
-          </div>
-        </div>
-
         <div className="system-panel">
+          <div className="clickable" onClick={() => setShowPatientModal(true)}>
+            <span>Patient File</span>
+            <b>{activePatient.name || "Click to Add"}</b>
+            <small>{activePatient.patientId || "No ID"}</small>
+          </div>
+
           <div>
             <span>Device ID</span>
             <b>{latest?.device_id || "TDX-001"}</b>
-          </div>
-
-          <div>
-            <span>Patient</span>
-            <b>{patient.name || "Not Entered"}</b>
           </div>
 
           <div>
@@ -346,39 +491,39 @@ function App() {
 
           <div>
             <span>Overall Status</span>
-            <b className={`status-${statusClass(overallStatus)}`}>{overallStatus}</b>
+            <b className={`status-${statusClass(latest?.health || "Waiting")}`}>
+              {latest?.health || "Waiting"}
+            </b>
           </div>
         </div>
 
-        <div className="vital-cards compact">
-          <div className="vital-card red">
+        <div className="vital-cards">
+          <div className="vital-card red clickable" onClick={() => openAnalysis("hr")}>
             <span>❤️ Heart Rate</span>
             <h2>{latest ? latest.hr : "--"}</h2>
             <p>BPM</p>
-            <small className={`status-${statusClass(hrStatus)}`}>{hrStatus}</small>
+            <small className={`status-${statusClass(vitalInfo.hr.status)}`}>{vitalInfo.hr.status}</small>
           </div>
 
-          <div className="vital-card green">
+          <div className="vital-card green clickable" onClick={() => openAnalysis("spo2")}>
             <span>🫁 SpO₂</span>
             <h2>{latest ? latest.spo2 : "--"}</h2>
             <p>%</p>
-            <small className={`status-${statusClass(spo2Status)}`}>{spo2Status}</small>
+            <small className={`status-${statusClass(vitalInfo.spo2.status)}`}>{vitalInfo.spo2.status}</small>
           </div>
 
-          <div className="vital-card orange">
+          <div className="vital-card orange clickable" onClick={() => openAnalysis("temp")}>
             <span>🌡 Temperature</span>
             <h2>{latest ? latest.temp : "--"}</h2>
             <p>°C</p>
-            <small className={`status-${statusClass(tempStatus)}`}>{tempStatus}</small>
+            <small className={`status-${statusClass(vitalInfo.temp.status)}`}>{vitalInfo.temp.status}</small>
           </div>
 
-          <div className="vital-card blue">
+          <div className="vital-card blue clickable" onClick={() => openAnalysis("ecg")}>
             <span>🫀 ECG Signal</span>
             <h2>{latest ? latest.ecg : "--"}</h2>
             <p>ADC</p>
-            <small className={`status-${statusClass(latest?.rhythm || "Waiting")}`}>
-              {latest?.rhythm || "Waiting"}
-            </small>
+            <small className={`status-${statusClass(vitalInfo.ecg.status)}`}>{vitalInfo.ecg.status}</small>
           </div>
         </div>
 
@@ -392,63 +537,35 @@ function App() {
         <div className="graph-panel">
           <div className="graph-header">
             <h3>Live Monitoring Graphs</h3>
-            <p>Real-time trends from Supabase live vitals table</p>
+            <p>Click any vital card above for detailed analysis</p>
           </div>
 
           <div className="graphs-grid">
-            <div className="graph-card heart">
-              <div className="graph-title">
-                <span>Heart Rate</span>
-                <b>{latest ? latest.hr : "--"} BPM</b>
+            {Object.entries(vitalInfo).map(([key, item]) => (
+              <div className={`graph-card ${key}`} key={key}>
+                <div className="graph-title">
+                  <span>{item.label}</span>
+                  <b>{item.value} {item.unit}</b>
+                </div>
+                <div className="chart-box">
+                  <Line
+                    data={chartData(item.label, item.values, item.color, key !== "ecg")}
+                    options={chartOptions(item.min, item.max, item.unit)}
+                  />
+                </div>
               </div>
-              <div className="chart-box">
-                <Line data={chartData("Heart Rate", hrHistory, "#ef4444", true)} options={chartOptions(40, 150, "BPM")} />
-              </div>
-            </div>
-
-            <div className="graph-card oxygen">
-              <div className="graph-title">
-                <span>SpO₂</span>
-                <b>{latest ? latest.spo2 : "--"}%</b>
-              </div>
-              <div className="chart-box">
-                <Line data={chartData("SpO₂", spo2History, "#22c55e", true)} options={chartOptions(85, 100, "%")} />
-              </div>
-            </div>
-
-            <div className="graph-card temp">
-              <div className="graph-title">
-                <span>Temperature</span>
-                <b>{latest ? latest.temp : "--"} °C</b>
-              </div>
-              <div className="chart-box">
-                <Line data={chartData("Temperature", tempHistory, "#f59e0b", true)} options={chartOptions(34, 40, "°C")} />
-              </div>
-            </div>
-
-            <div className="graph-card ecg">
-              <div className="graph-title">
-                <span>ECG Wave</span>
-                <b>{latest ? latest.ecg : "--"}</b>
-              </div>
-              <div className="chart-box">
-                <Line data={chartData("ECG", ecgHistory, "#38bdf8", false)} options={chartOptions(1500, 2600, "")} />
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
         <div className="controls">
           <button onClick={fetchData}>Refresh</button>
-
           <button onClick={() => setRunning(!running)}>
             {running ? "Stop Monitoring" : "Start Monitoring"}
           </button>
-
           <button onClick={() => setShowTable(!showTable)}>
-            {showTable ? "Hide Supabase Table" : "Show Supabase Table"}
+            {showTable ? "Hide Table" : "Show Table"}
           </button>
-
           <button onClick={downloadCSV}>Export CSV</button>
         </div>
 
@@ -502,6 +619,93 @@ function App() {
           </span>
         </div>
       </div>
+
+      {showPatientModal && (
+        <div className="modal-bg">
+          <div className="modal patient-modal">
+            <div className="modal-header">
+              <h2>Patient File</h2>
+              <button onClick={() => setShowPatientModal(false)}>Close</button>
+            </div>
+
+            <div className="patient-actions">
+              <button onClick={newPatientFile}>New File</button>
+              <button onClick={savePatientFile}>Save</button>
+              <button onClick={saveAsPatientFile}>Save As</button>
+              <button className="danger" onClick={deletePatientFile}>Delete</button>
+            </div>
+
+            <div className="patient-select">
+              <select onChange={(e) => loadPatientFile(e.target.value)} value={activePatient.fileName}>
+                <option value="">Select Saved Patient</option>
+                {patientFiles.map((p) => (
+                  <option key={p.fileName} value={p.fileName}>
+                    {p.fileName} - {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="patient-form-modal">
+              <input placeholder="File Name" value={activePatient.fileName} onChange={(e) => updatePatient("fileName", e.target.value)} />
+              <input placeholder="Patient Name" value={activePatient.name} onChange={(e) => updatePatient("name", e.target.value)} />
+              <input placeholder="Patient ID" value={activePatient.patientId} onChange={(e) => updatePatient("patientId", e.target.value)} />
+              <input placeholder="Age" value={activePatient.age} onChange={(e) => updatePatient("age", e.target.value)} />
+
+              <select value={activePatient.gender} onChange={(e) => updatePatient("gender", e.target.value)}>
+                <option value="">Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+
+              <input placeholder="Condition" value={activePatient.condition} onChange={(e) => updatePatient("condition", e.target.value)} />
+              <textarea placeholder="Notes" value={activePatient.notes} onChange={(e) => updatePatient("notes", e.target.value)} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAnalysisModal && selected && (
+        <div className="modal-bg">
+          <div className="modal analysis-modal">
+            <div className="modal-header">
+              <h2>{selected.title}</h2>
+              <button onClick={() => setShowAnalysisModal(false)}>Close</button>
+            </div>
+
+            <div className="analysis-summary">
+              <div>
+                <span>Latest</span>
+                <b>{selected.value} {selected.unit}</b>
+              </div>
+              <div>
+                <span>Average</span>
+                <b>{avg(selected.values)} {selected.unit}</b>
+              </div>
+              <div>
+                <span>Minimum</span>
+                <b>{minVal(selected.values)} {selected.unit}</b>
+              </div>
+              <div>
+                <span>Maximum</span>
+                <b>{maxVal(selected.values)} {selected.unit}</b>
+              </div>
+            </div>
+
+            <div className="analysis-chart">
+              <Line
+                data={chartData(selected.label, selected.values, selected.color, selectedVital !== "ecg")}
+                options={chartOptions(selected.min, selected.max, selected.unit)}
+              />
+            </div>
+
+            <div className="analysis-text">
+              <h3>Status: <span className={`status-${statusClass(selected.status)}`}>{selected.status}</span></h3>
+              <p>{selected.analysis}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
