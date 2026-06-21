@@ -38,7 +38,6 @@ body {
 .system-panel,
 .vital-card,
 .mini-status div,
-.patient-panel,
 .graph-panel,
 .graph-card,
 .table-panel,
@@ -76,7 +75,8 @@ body {
 
 select,
 .clock,
-input {
+input,
+textarea {
   padding: 9px 11px;
   border-radius: 11px;
   border: 1px solid rgba(125, 211, 252, 0.25);
@@ -86,7 +86,14 @@ input {
   outline: none;
 }
 
-input::placeholder {
+textarea {
+  resize: vertical;
+  min-height: 85px;
+  font-family: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
   color: #94a3b8;
 }
 
@@ -102,6 +109,55 @@ input::placeholder {
 
 .pause {
   background: #64748b;
+}
+
+.login-page {
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #12335f, #020617 72%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 390px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 22px;
+  padding: 26px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+.login-card h1 {
+  margin: 0;
+  color: #38bdf8;
+  font-size: 30px;
+}
+
+.login-card p {
+  margin: 6px 0 20px;
+  color: #bfdbfe;
+}
+
+.login-card input {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 12px;
+}
+
+.login-card button {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.login-error {
+  display: block;
+  color: #ef4444;
+  font-weight: bold;
+  margin: 4px 0;
 }
 
 .alarm-banner {
@@ -194,36 +250,6 @@ input::placeholder {
   }
 }
 
-.patient-panel {
-  margin-top: 12px;
-  border-radius: 16px;
-  padding: 14px;
-}
-
-.patient-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 11px;
-}
-
-.patient-title h3 {
-  margin: 0;
-  color: #38bdf8;
-}
-
-.patient-title p {
-  margin: 0;
-  color: #94a3b8;
-  font-size: 13px;
-}
-
-.patient-form {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 0.7fr 0.8fr 1.8fr;
-  gap: 10px;
-}
-
 .system-panel {
   margin-top: 12px;
   border-radius: 16px;
@@ -252,6 +278,22 @@ input::placeholder {
   font-size: 15px;
 }
 
+.system-panel small {
+  display: block;
+  margin-top: 3px;
+  color: #7dd3fc;
+}
+
+.clickable {
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.clickable:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.7);
+}
+
 .vital-cards {
   margin-top: 12px;
   display: grid;
@@ -261,9 +303,9 @@ input::placeholder {
 
 .vital-card {
   border-radius: 16px;
-  padding: 11px;
+  padding: 10px;
   text-align: center;
-  min-height: 104px;
+  min-height: 98px;
 }
 
 .vital-card span {
@@ -273,37 +315,59 @@ input::placeholder {
 }
 
 .vital-card h2 {
-  margin: 7px 0 1px;
-  font-size: 28px;
+  margin: 6px 0 1px;
+  font-size: 27px;
 }
 
 .vital-card p {
   margin: 0;
   color: #cbd5e1;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .vital-card small {
   display: inline-block;
-  margin-top: 5px;
+  margin-top: 4px;
   font-weight: bold;
-  font-size: 13px;
+  font-size: 12px;
 }
 
-.red {
+.vital-card.hr {
   border-top: 4px solid #ef4444;
 }
 
-.green {
+.vital-card.spo2 {
   border-top: 4px solid #22c55e;
 }
 
-.orange {
+.vital-card.temp {
   border-top: 4px solid #f59e0b;
 }
 
-.blue {
+.vital-card.ecg {
   border-top: 4px solid #38bdf8;
+}
+
+.blink-card {
+  animation: cardBlink 0.85s infinite;
+}
+
+@keyframes cardBlink {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(239, 68, 68, 0.2);
+  }
+
+  50% {
+    transform: scale(1.025);
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.65);
+    border-color: rgba(239, 68, 68, 0.95);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(239, 68, 68, 0.2);
+  }
 }
 
 .status-normal {
@@ -323,7 +387,8 @@ input::placeholder {
 }
 
 .status-no-finger,
-.status-checking {
+.status-checking,
+.status-sensor {
   color: #facc15;
 }
 
@@ -343,7 +408,7 @@ input::placeholder {
 
 .mini-status div {
   border-radius: 15px;
-  padding: 11px;
+  padding: 10px;
   text-align: center;
 }
 
@@ -356,7 +421,7 @@ input::placeholder {
 .mini-status b {
   display: block;
   margin-top: 4px;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .graph-panel {
@@ -391,11 +456,11 @@ input::placeholder {
   overflow: hidden;
 }
 
-.graph-card.heart {
+.graph-card.hr {
   border-left: 4px solid #ef4444;
 }
 
-.graph-card.oxygen {
+.graph-card.spo2 {
   border-left: 4px solid #22c55e;
 }
 
@@ -421,11 +486,11 @@ input::placeholder {
 
 .graph-title b {
   color: #e0f2fe;
-  font-size: 17px;
+  font-size: 16px;
 }
 
 .chart-box {
-  height: 190px;
+  height: 180px;
 }
 
 .controls {
@@ -448,6 +513,16 @@ button {
 
 button:hover {
   background: #0369a1;
+}
+
+button.danger,
+.danger {
+  background: #dc2626;
+}
+
+button.danger:hover,
+.danger:hover {
+  background: #b91c1c;
 }
 
 .table-panel {
@@ -490,11 +565,130 @@ th {
   font-size: 13px;
 }
 
-@media (max-width: 1100px) {
-  .patient-form {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.modal-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.78);
+  backdrop-filter: blur(8px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
 
+.modal {
+  width: 100%;
+  max-width: 850px;
+  max-height: 92vh;
+  overflow-y: auto;
+  background: #0f172a;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 20px;
+  padding: 18px;
+  box-shadow: 0 24px 55px rgba(0, 0, 0, 0.55);
+}
+
+.patient-modal {
+  max-width: 760px;
+}
+
+.analysis-modal {
+  max-width: 900px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #38bdf8;
+}
+
+.patient-actions {
+  margin: 15px 0;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.patient-select {
+  margin-bottom: 14px;
+}
+
+.patient-select select {
+  width: 100%;
+}
+
+.patient-form-modal {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.patient-form-modal textarea {
+  grid-column: 1 / -1;
+}
+
+.analysis-summary {
+  margin: 16px 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.analysis-summary div {
+  background: rgba(2, 6, 23, 0.65);
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  border-radius: 14px;
+  padding: 12px;
+  text-align: center;
+}
+
+.analysis-summary span {
+  display: block;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.analysis-summary b {
+  display: block;
+  margin-top: 5px;
+  color: #e0f2fe;
+  font-size: 18px;
+}
+
+.analysis-chart {
+  height: 360px;
+  background: rgba(2, 6, 23, 0.45);
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  border-radius: 16px;
+  padding: 12px;
+}
+
+.analysis-text {
+  margin-top: 14px;
+  background: rgba(2, 6, 23, 0.55);
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.analysis-text h3 {
+  margin: 0 0 7px;
+  color: #e0f2fe;
+}
+
+.analysis-text p {
+  margin: 0;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+@media (max-width: 1100px) {
   .graphs-grid {
     grid-template-columns: 1fr;
   }
@@ -503,8 +697,8 @@ th {
 @media (max-width: 950px) {
   .topbar,
   .footer,
-  .patient-title,
-  .alarm-banner {
+  .alarm-banner,
+  .modal-header {
     flex-direction: column;
     gap: 10px;
     text-align: center;
@@ -513,8 +707,9 @@ th {
   .system-panel,
   .vital-cards,
   .mini-status,
-  .patient-form,
-  .graphs-grid {
+  .graphs-grid,
+  .analysis-summary,
+  .patient-form-modal {
     grid-template-columns: 1fr;
   }
 
@@ -524,5 +719,9 @@ th {
 
   .alarm-banner p {
     margin-left: 0;
+  }
+
+  .analysis-chart {
+    height: 260px;
   }
 }
