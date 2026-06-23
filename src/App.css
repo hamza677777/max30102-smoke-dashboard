@@ -42,12 +42,15 @@ body{
   display:flex;
   gap:10px;
   align-items:center;
+  flex-wrap:wrap;
 }
 
 .top-actions button,
 .controls button,
 .modal-actions button,
-.patient-actions button{
+.patient-actions button,
+.saved-card button,
+.alarm-banner button{
   background:#0284c7;
   color:white;
   border:none;
@@ -58,11 +61,20 @@ body{
 }
 
 .top-actions button:hover,
-.controls button:hover{
+.controls button:hover,
+.saved-card button:hover{
   background:#0ea5e9;
 }
 
 .clock{
+  font-weight:bold;
+}
+
+.role-badge{
+  background:#312e81;
+  color:#c4b5fd;
+  padding:8px 14px;
+  border-radius:30px;
   font-weight:bold;
 }
 
@@ -104,6 +116,12 @@ body{
   border:1px solid red;
 }
 
+.alarm-sensor,
+.alarm-waiting{
+  background:#172554;
+  border:1px solid #38bdf8;
+}
+
 .alarm-dot{
   width:12px;
   height:12px;
@@ -136,6 +154,10 @@ body{
 
 .system-panel b{
   color:white;
+}
+
+.clickable{
+  cursor:pointer;
 }
 
 .vital-cards{
@@ -242,11 +264,16 @@ body{
   height:280px;
 }
 
+.ecg-box{
+  height:340px;
+}
+
 .controls{
   display:flex;
   justify-content:center;
   gap:15px;
   margin:20px 0;
+  flex-wrap:wrap;
 }
 
 .table-panel{
@@ -254,6 +281,7 @@ body{
   border-radius:15px;
   padding:20px;
   overflow:auto;
+  margin-bottom:20px;
 }
 
 table{
@@ -269,6 +297,46 @@ th,td{
 
 th{
   background:#0f172a;
+}
+
+.saved-panel{
+  background:#071630;
+  border-radius:15px;
+  padding:20px;
+  margin-bottom:20px;
+}
+
+.saved-panel h3{
+  color:#38bdf8;
+  margin-bottom:15px;
+}
+
+.saved-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:15px;
+}
+
+.saved-card{
+  background:#020d20;
+  border:1px solid #334155;
+  border-radius:12px;
+  padding:15px;
+}
+
+.saved-card h4{
+  color:#38bdf8;
+  margin-bottom:8px;
+}
+
+.saved-card p{
+  color:white;
+}
+
+.saved-card small{
+  display:block;
+  color:#94a3b8;
+  margin:8px 0;
 }
 
 .footer{
@@ -307,6 +375,11 @@ th{
   margin-bottom:20px;
 }
 
+.modal-actions{
+  display:flex;
+  gap:10px;
+}
+
 .analysis-summary{
   display:grid;
   grid-template-columns:repeat(4,1fr);
@@ -319,6 +392,12 @@ th{
   padding:20px;
   text-align:center;
   border-radius:12px;
+}
+
+.analysis-summary span{
+  color:#94a3b8;
+  display:block;
+  margin-bottom:8px;
 }
 
 .analysis-chart{
@@ -341,13 +420,20 @@ th{
 .patient-form-modal input,
 .patient-form-modal textarea,
 .patient-form-modal select,
-.top-actions select{
+.patient-select select{
   width:100%;
   padding:12px;
   background:#020d20;
   color:white;
   border:1px solid #334155;
   border-radius:10px;
+}
+
+.patient-form-modal input:disabled,
+.patient-form-modal textarea:disabled,
+.patient-form-modal select:disabled{
+  opacity:.6;
+  cursor:not-allowed;
 }
 
 .patient-form-modal textarea{
@@ -359,18 +445,15 @@ th{
   display:flex;
   gap:10px;
   margin-bottom:15px;
+  flex-wrap:wrap;
+}
+
+.patient-actions .danger{
+  background:#dc2626;
 }
 
 .patient-select{
   margin-bottom:15px;
-}
-
-.patient-select select{
-  width:100%;
-  padding:12px;
-  background:#020d20;
-  color:white;
-  border-radius:10px;
 }
 
 .login-page{
@@ -382,19 +465,33 @@ th{
 }
 
 .login-card{
-  width:400px;
+  width:420px;
   background:#071630;
   padding:30px;
   border-radius:18px;
   display:flex;
   flex-direction:column;
   gap:15px;
+  border:1px solid rgba(56,189,248,.25);
+}
+
+.login-card h1{
+  color:#38bdf8;
+  text-align:center;
+}
+
+.login-card p,
+.login-card small{
+  color:#94a3b8;
+  text-align:center;
 }
 
 .login-card input{
   padding:12px;
   border-radius:10px;
-  border:none;
+  border:1px solid #334155;
+  background:#020d20;
+  color:white;
 }
 
 .login-card button{
@@ -403,10 +500,13 @@ th{
   border-radius:10px;
   background:#0284c7;
   color:white;
+  font-weight:bold;
+  cursor:pointer;
 }
 
 .login-error{
-  color:red;
+  color:#ef4444;
+  text-align:center;
 }
 
 .status-normal{
@@ -434,6 +534,11 @@ th{
   color:#ef4444;
 }
 
+.status-no-finger,
+.status-waiting{
+  color:#facc15;
+}
+
 .blink-card{
   animation:blink 1s infinite;
 }
@@ -444,10 +549,23 @@ th{
   100%{box-shadow:0 0 5px red;}
 }
 
+.role-admin .topbar h1{
+  color:#38bdf8;
+}
+
+.role-doctor .topbar h1{
+  color:#22c55e;
+}
+
+.role-patient .topbar h1{
+  color:#f59e0b;
+}
+
 @media(max-width:1100px){
   .vital-cards,
   .mini-status,
-  .system-panel{
+  .system-panel,
+  .saved-grid{
     grid-template-columns:repeat(2,1fr);
   }
 
@@ -461,12 +579,22 @@ th{
   .mini-status,
   .system-panel,
   .analysis-summary,
-  .patient-form-modal{
+  .patient-form-modal,
+  .saved-grid{
     grid-template-columns:1fr;
+  }
+
+  .patient-form-modal textarea{
+    grid-column:1;
   }
 
   .footer{
     flex-direction:column;
     gap:10px;
+  }
+
+  .topbar{
+    flex-direction:column;
+    align-items:flex-start;
   }
 }
